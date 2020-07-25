@@ -55,6 +55,23 @@ def get_audio_location(audio_id):
 	else:
 		return ''
 
+# Attaches or detaches a question from the module, returning false if the question was detached
+def attach_question(module_id, question_id):
+	query = f"SELECT * FROM module_question WHERE moduleID = {module_id} AND questionID = {question_id}"
+	result = post_to_db(query)
+	# If an empty list is returned, post new link
+	if not result:
+		query = f'''INSERT INTO module_question (moduleID, questionID)
+				VALUES ({module_id}, {question_id})'''
+		post_to_db(query)
+		return True
+	else:
+		# Delete link if it exists
+		query = f'''DELETE FROM module_questions
+				WHERE moduleID = {module_id} AND questionID = {question_id}'''
+		post_to_db(query)
+		return False
+
 # For acquiring all modules in a group
 class Modules(Resource):
 
@@ -242,18 +259,41 @@ class AttachQuestion(Resource):
 		data = parser.parse_args()
 		module_id = data['moduleID']
 		question_id = data['questionID']
-		# Determining if link already exists
-		query = f"SELECT * FROM module_question WHERE moduleID = {module_id} AND questionID = {question_id}"
-		result = post_to_db(query)
-		# If an empty list is returned, post new link
-		if not result:
-			query = f'''INSERT INTO module_question (moduleID, questionID)
-					VALUES ({module_id}, {question_id})'''
-			post_to_db(query)
+		# Attaching or detaching if already attached
+		attached = attach_question(module_id, question_id)
+		# Response
+		if attached:
 			return {'message' : 'Question has been linked to module.'}, 201
 		else:
-			# Delete link if it exists
-			query = f'''DELETE FROM module_questions
-					WHERE moduleID = {module_id} AND questionID = {question_id}'''
-			post_to_db(query)
 			return {'message' : 'Question has been unlinked from module.'}, 200
+
+#  For attaching and detaching terms from modules
+class AttachTerm(Resource):
+	@jwt_required
+	def post(self):
+		# Parsing JSON
+		parser = reqparse.RequestParser()
+		parser.add_argument('moduleID', type=int, required=True)
+		parser.add_argument('termID', type=int, required=False)
+		data = parser.parse_args()
+		module_id = data['moduleID']
+		term_id = data['termID']
+		# Finding associated MATCH question with term
+		query = f'''
+				SELECT question.questionID* FROM question, answer
+				WHERE question.questionID = answer.questionID
+				AND answer.termID = {term_id}
+				'''
+		result = post_to_db(query)
+		# If term or match question does not exist
+		if not result:
+			return {'message' : 'Term does not exist or MATCH question has been deleted internally.'}
+		question_id = result[0]
+
+		# Attaching or detaching if already attached
+		attached = attach_question(module_id, question_id)
+		# Response
+		if attached:
+			return {'message' : 'Term has been linked to module.'}, 201
+		else:
+			return {'message' : 'Term has been unlinked from module.'}, 200
