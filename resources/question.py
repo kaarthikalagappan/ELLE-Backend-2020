@@ -36,7 +36,7 @@ class Answer(Resource):
         post_to_db(query, (int(data['questionID']), int(data['termID'])))
         return {'message':'Successfully added answer!'}, 201
 
-
+#REMOVE THIS METHOD AS DELETING ANSWER WILL BE HANDLED WITHIN MODIFY QUESTION IN THE FUTURE
 class DeleteAnswer(Resource):
     #adds an answer to the database table
     @jwt_required
@@ -83,65 +83,8 @@ class Modify(Resource):
 		                          )
         data = question_parser.parse_args()
 
-        # differCheck = False
-        # query = "SELECT * FROM module_question WHERE questionID =%s"
-        # result = get_from_db(query, data['questionID'])
-        # previousID = -1
-        # #CHECK TO SEE IF QUESTION IS ASSOCIATED WITH MORE THAN ONE MODULE
-        # for row in result:
-        #     if (row[0] != previousID):
-        #         if previousID == -1:
-        #             pass
-        #         else:
-        #             differCheck = True
-        #             break;
-        #     previousID = row[0]
-        # if differCheck:
-        #     #SO WE NEED TO FIND THE MODULE ASSOCIATED WITH GROUP NOW
-        #     query = "SELECT * FROM module WHERE groupID=%s"
-        #     result = get_from_db(query, data['groupID'])
-        #     for row in result:
-        #     #AT THIS POINT WE KNOW THE MODULEID THAT WE NEED TO CHANGE THIS QUESTION FOR SO WE DUPLICATE THE # QUESTION
-        #     #AND UPDATE THE QUESTION AT THIS POINT RETURNING THE NEW QUESTIONID FOR THE MODULE_QUESTION TABLE
-        #         if row[1] == data['groupID']:
-        #             moduleIDToChange = row[0]
-
-
-        #     #GET QUESTION INFO TO DUPLICATE
-        #     query = "SELECT `questionID`, `audioID`, `imageID`, `type`, `questionText` FROM `question` WHERE `questionID`=%s"
-        #     result = get_from_db(query, data['questionID'])
-        #     questionObject = {}
-        #     for row in result:
-        #         questionObject['audioID'] = row[1]
-        #         questionObject['imageID'] = row[2]
-        #         questionObject['type'] = row[3]
-        #         questionObject['questionText'] = row[4]
-        #     questionObject['questionText'] = data['questionText']
-        #     questionObject['audioID'] = data['audioID']
-        #     questionObject['imageID'] = data['imageID']
-        #     questionObject['type'] = data['type']
-
-        #     #MAKE A NEW QUESTION WITH THE NEW FIELDS
-        #     query = "INSERT INTO question (`audioID`, `imageID`, `type`, `questionText`) VALUES (%s, %s, %s, %s)"
-        #     post_to_db(query, (int(questionObject['audioID']), int(questionObject['imageID']),questionObject['type'], questionObject['questionText']))
-
-        #     #NOW GET THE NEW QUESTIONID
-        #     query = "SELECT MAX(`questionID`) FROM `question`"
-        #     result = get_from_db(query)
-        #     for row in result:
-        #         newQuestionID=row[0]
-
-            # #UPDATE THE PREVIOUS ID IN THE MODULE_QUESTION
-            # query = "UPDATE `module_question` set `questionID=%s` WHERE `moduleID`=%s"
-            # post_to_db(query, (newQuestionID,moduleIDToChange))
-
-            # return {newQuestionID},201
-
-        # else:
-            #WE KNOW THAT THE QUESTION IS ONLY ASSOCIATED WITH ONE MODULEID SO WE CAN JUST UPDATE IT AS IS, AND NOTHING
-            #NEED TO CHANGE
-        query = "UPDATE `question` SET `questionText`=%s, `type`=%s, `audioID`=%s, `imageID=%s` WHERE `questionID`=%s"
-        post_to_db(query, (data['questionText'], data['type'], data['audioID'], data['imageID']))
+        query = "UPDATE `question` SET `questionText`=%s, `type`=%s, `audioID`=%s, `imageID`=%s WHERE `questionID`=%s"
+        post_to_db(query, (data['questionText'], data['type'], data['audioID'], data['imageID'], data['questionID']))
 
         return {'message':'Successfully modified question!'}, 201
 

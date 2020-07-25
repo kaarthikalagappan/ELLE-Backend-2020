@@ -44,10 +44,6 @@ class Session(Resource):
         parser.add_argument('sessionDate',
                             required = False,
                             type = str)
-        parser.add_argument('playerScore',
-                            required = True,
-                            help = "Need to specify what's the score in this session",
-                            type = str)
         parser.add_argument('startTime',
                             required = True,
                             help = "Need the start time of the session",
@@ -75,8 +71,8 @@ class Session(Resource):
             result = get_from_db(query, None, conn, cursor)
             sessionID = check_max_id(result)
 
-            query = f"INSERT INTO `session` (`sessionID`, `userID`, `moduleID`, `sessionDate`, `playerScore`, `startTime`, `platform`) \
-                VALUES ({sessionID}, {user_id},{data['moduleID']},'{data['sessionDate']}','{data['playerScore']}','{data['startTime']}', \
+            query = f"INSERT INTO `session` (`sessionID`, `userID`, `moduleID`, `sessionDate`, `startTime`, `platform`) \
+                VALUES ({sessionID}, {user_id},{data['moduleID']},'{data['sessionDate']}','{data['startTime']}', \
                 '{data['platform'][:3]}')"
             post_to_db(query, None, conn, cursor)
             raise ReturnSuccess({'sessionID' : sessionID}, 201)
@@ -102,6 +98,10 @@ class Session(Resource):
                             required=True,
                             type=str,
                             help="session's end time required, in HH:MM format (24 Hour format)")
+        parser.add_argument('playerScore',
+                            required = True,
+                            help = "Need to specify what's the score of the user in this session",
+                            type = str)
         data = parser.parse_args()
 
         user_id = get_jwt_identity()
@@ -120,7 +120,7 @@ class Session(Resource):
             elif result[0][6]:
                     raise SessionException("Wrong session ID provided", 400)
 
-            query = f"UPDATE `session` SET `endTime` = '{data['endTime']}' WHERE `session`.`sessionID` = {data['sessionID']}"
+            query = f"UPDATE `session` SET `endTime` = '{data['endTime']}', `playerScore` = '{data['playerScore']}' WHERE `session`.`sessionID` = {data['sessionID']}"
             post_to_db(query, None, conn, cursor)
             raise ReturnSuccess("Session successfully ended", 200)
         except ReturnSuccess as success:

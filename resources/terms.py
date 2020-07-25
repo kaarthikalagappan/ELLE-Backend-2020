@@ -470,7 +470,7 @@ class Term(Resource):
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
-
+            
             query = "SELECT permissionGroup FROM user WHERE userID = %s"
             permission = get_from_db(query, str(user_id), conn, cursor)
 
@@ -508,13 +508,12 @@ class Term(Resource):
                     query = "DELETE FROM audio WHERE audioID = %s"
                     delete_from_db(query, str(audioID), conn, cursor)
 
+            deleteAnswersSuccess = Delete_Term_Associations(termID=data['termID'], givenConn=conn, givenCursor=cursor)
+            if deleteAnswersSuccess == 0:
+                raise TermsException("Error when trying to delete associated answers", 500)
             query = "DELETE FROM term WHERE termID = %s"
             delete_from_db(query, str(data['termID']), conn, cursor)
             raise ReturnSuccess("Term " + str(data['termID']) + " successfully deleted", 202)
-
-        except TermsException as error:
-            conn.rollback()
-            return error.msg, error.returnCode
         except ReturnSuccess as success:
             if imageLocation and imageLocation[0]:
                 os.remove(str(cross_plat_path(TEMP_DELETE_FOLDER + str(imageLocation[0][0]))))
@@ -522,6 +521,9 @@ class Term(Resource):
                 os.remove(str(cross_plat_path(TEMP_DELETE_FOLDER + str(audioLocation[0][0]))))
             conn.commit()
             return success.msg, success.returnCode
+        except TermsException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except Exception as error:
             if imageLocation and imageLocation[0]:
                 os.rename(cross_plat_path(TEMP_DELETE_FOLDER + str(imageLocation[0][0])), cross_plat_path(IMG_UPLOAD_FOLDER + str(imageLocation[0][0])))
@@ -679,6 +681,53 @@ def addNewTags(tagList, termID, conn=None, cursor=None):
             query = "INSERT into tag (termID, tagName) VALUES (%s, %s)"
             post_to_db(query, (termID, str(tag).lower()), conn, cursor)
 
+def Delete_Term_Associations(termID, questionID=None, givenConn=None, givenCursor=None):
+    #Note: This function is called from delete method of Term.
+    #Checks how many Answer records are associated with this term and deletes those answer records
+    #But before deleting, it checks if the answer record's questionID is associated with only the term being deleted
+        #If so, deletes the question as well
+    try:
+        conn = mysql.connect() if givenConn == None else givenConn
+        cursor = conn.cursor() if givenCursor == None else givenCursor
+
+        deleteAnswerQuery = "DELETE from `answer` WHERE `questionID` = %s AND `termID` = %s"
+        deleteQuestionQuery = "DELETE from `question` WHERE `questionID` = %s"
+        getAssociatedQuestions = "SELECT * FROM `answer` WHERE questionID = %s"
+        query = "SELECT * FROM `answer` WHERE termID = %s"
+        answerRecords = get_from_db(query, str(termID), conn, cursor)
+
+        for answer in answerRecords:
+            if answer:
+                questionInAnswers = get_from_db(getAssociatedQuestions, str(answer[0]), conn, cursor)
+                if questionInAnswers and questionInAnswers[0] and len(questionInAnswers) <= 1:
+                    if questionInAnswers[0][1] != answer[1]:
+                        raise TermsException("Something went wrong in the logic of deleting a term", 500)
+                    delete_from_db(deleteQuestionQuery, str(answer[0]))
+                    if DEBUG:
+                        print("QuestionID " + str(answer[0]) + " was deleted from database because it was only linked to the deleting term with termID: " + str(termID))
+                delete_from_db(deleteAnswerQuery, (str(answer[0]), str(answer[1])), conn, cursor)
+                print(answer)
+        
+        raise ReturnSuccess("Successfully deleted associated answer records", 200)
+    except TermsException as error:
+        if givenConn == None:
+            conn.rollback()
+        print(error.msg)
+        return 0
+    except ReturnSuccess as success:
+        if givenConn == None:
+            conn.commit()
+        print(success.msg)
+        return 1
+    except Exception as error:
+        if givenConn == None:
+            conn.rollback()
+        print(error)
+        return 0
+    finally:
+        if(givenConn == None and conn.open):
+            cursor.close()
+            conn.close()
 
 def convertToJSON(data):
     if len(data) < 10:
