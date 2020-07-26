@@ -12,7 +12,7 @@ from resources.game_logs import GameLog
 from resources.logged_answer import LoggedAnswer
 from resources.sessions import Session, SearchSessions
 from resources.question import Question, Answer, SearchType, SearchText, DeleteQuestion, DeleteAnswer, Modify
-from resources.modules import Modules, ModuleQuestions, Module, AttachQuestion
+from resources.modules import Modules, ModuleQuestions, Module, AttachQuestion, AttachTerm
 from resources.stats import ModuleStats
 from db import mysql
 from db_utils import *
@@ -88,6 +88,7 @@ api.add_resource(Modules,'/modules')
 api.add_resource(ModuleQuestions,'/modulequestions')
 api.add_resource(Module,'/module')
 api.add_resource(AttachQuestion, '/attachquestion')
+api.add_resource(AttachTerm, '/attachterm')
 api.add_resource(LoggedAnswer, '/loggedanswer')
 api.add_resource(Session, '/session')
 api.add_resource(SearchSessions, '/searchsessions')
