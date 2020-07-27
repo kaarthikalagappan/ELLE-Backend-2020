@@ -87,8 +87,9 @@ class Session(Resource):
                 cursor.close()
                 conn.close()
 
+class End_Session(Resource):
     @jwt_required
-    def put(self):
+    def post(self):
         parser = reqparse.RequestParser()
         parser.add_argument('sessionID',
                             required = True,
