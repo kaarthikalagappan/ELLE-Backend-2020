@@ -419,18 +419,21 @@ class Term(Resource):
                 conn.close()
             #If they added a new term, create a default question, link the term to the question, \
             #and add that question to the module
+            #NEED TO CLEAN THIS UP, NOT A PROPER WAY TO DO IT - MAYBE INTEGRATE IT WITHOUT CALLING ANOTHER REQUEST
             if (not data['termID']) and data['moduleID']:
                 url = "http://0.0.0.0:3000/question"
                 payload = {
                     'type' : 'PHRASE' if data['type'] and (data['type'] == 'PH' or data['type'] == 'PHRASE') else 'MATCH',
-                    'questionText' : "What is the translation of " + data['front'] + "?"
+                    'questionText' : "What is the translation of " + data['front'] + "?",
+                    "moduleID" : data['moduleID']
                 }
                 headers = {
                     'Authorization': request.headers['Authorization']
                 }
                 response = (requests.request("POST", url, headers=headers, data = payload)).json()
-                # print(response)
-                if not response or not response['questionID']:
+                if DEBUG:
+                    print(response)
+                if not response or 'questionID' not in response:
                     raise TermsException("Error when trying to turn term into question", 500)
 
                 url = "http://0.0.0.0:3000/addAnswer"
@@ -442,16 +445,6 @@ class Term(Resource):
                 if (answer_response.status_code != 201 and answer_response.status_code != 200) \
                 or not answer_response_json or not answer_response_json['message']:
                     raise TermsException("Error when trying to add term to question as answer", 500)
-
-                url = "http://0.0.0.0:3000/attachquestion"
-                payload = {'moduleID': str(data['moduleID']),
-                        'questionID': str(response['questionID'])}
-                module_question_response = requests.request("POST", url, headers=headers, data = payload)
-                module_question_response_json = module_question_response.json()
-                # print(module_question_response_json)
-                if (module_question_response.status_code != 201 and module_question_response.status_code != 200) \
-                or not module_question_response_json or not module_question_response_json['message']:
-                    raise TermsException("Error when trying to add question to module", 500)
 
     @jwt_required
     def delete(self):
