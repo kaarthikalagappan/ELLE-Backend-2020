@@ -289,7 +289,7 @@ class AttachTerm(Resource):
 		question_id = -1
 		if not result or not result[0]:
 			# Determining if term exists
-			result = get_from_db(f"SELECT TOP 1 front FROM term WHERE termID = {term_id}")
+			result = get_from_db(f"SELECT front FROM term WHERE termID = {term_id}")
 			if result:
 				front = result[0]
 				# Creating a new MATCH question if missing (Only occurs for terms manually created through SQL)
