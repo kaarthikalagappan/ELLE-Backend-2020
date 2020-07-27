@@ -67,7 +67,7 @@ def attach_question(module_id, question_id):
 		return True
 	else:
 		# Delete link if it exists
-		query = f'''DELETE FROM module_questions
+		query = f'''DELETE FROM module_question
 				WHERE moduleID = {module_id} AND questionID = {question_id}'''
 		post_to_db(query)
 		return False
