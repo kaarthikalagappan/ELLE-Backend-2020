@@ -99,7 +99,7 @@ class ModuleStats(Resource):
         platforms = get_platforms()
         stats = {}
         for platform in platforms:
-            query = f"SELECT * FROM session WHERE moduleID = '{module_id} AND platform = {platform}'"
+            query = f"SELECT * FROM session WHERE moduleID = {module_id} AND platform = {platform}'"
             sessions = query_sessions(query)
             stat = get_averages(sessions)
             stat['platform'] = platform
@@ -120,7 +120,7 @@ class PlatformStats(Resource):
         modules = get_module_headers()
         stats = {}
         for module in modules:
-            query = f"SELECT * FROM session WHERE moduleID = '{module[0]} AND platform = {platform}'"
+            query = f"SELECT * FROM session WHERE moduleID = {module[0]} AND platform = {platform}'"
             sessions = query_sessions(query)
             stat = get_averages(sessions)
             stat['module'] = module[1]
