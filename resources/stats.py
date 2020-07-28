@@ -88,7 +88,10 @@ class PlatformNames(Resource):
     @jwt_required
     def get(self):
         result = get_platforms()
-        return result
+        list = []
+        for row in result:
+            list.append(row[0])
+        return list
         
 
 # Provides the average score and session duration for the given module
