@@ -36,6 +36,8 @@ def query_sessions(query):
     return sessions
 
 def get_averages(sessions):
+    if len(sessions) == 0:
+        return None
     scoreTotal = 0
     timeTotal = 0
     for session in sessions:
@@ -45,11 +47,12 @@ def get_averages(sessions):
         # Accumulating time
         endDateTime = datetime.strptime(session['endTime'], '%H:%M')
         elapsedTime = endDateTime - startDateTime
-        timeTotal += timedelta(elapsedTime)
+        timeTotal += elapsedTime.total_seconds()
     # Returning statistics object
     stat = {}
-    stat['averageScore'] = scoreTotal / sessions.length
-    stat['averageSessionLength'] = timeTotal / sessions.length
+    stat['averageScore'] = scoreTotal / len(sessions)
+    # Session length in minutes
+    stat['averageSessionLength'] = timeTotal * 60 / len(sessions)
     return stat
         
 
@@ -97,12 +100,14 @@ class ModuleStats(Resource):
         data = parser.parse_args()
         module_id = data['moduleID']
         platforms = get_platforms()
-        stats = {}
+        stats = []
         for platform in platforms:
-            query = f"SELECT * FROM session WHERE moduleID = {module_id} AND platform = '{platform}''"
+            query = f"SELECT * FROM session WHERE moduleID = {module_id} AND platform = '{platform[0]}'"
             sessions = query_sessions(query)
             stat = get_averages(sessions)
-            stat['platform'] = platform
+            if not stat:
+                continue
+            stat['platform'] = platform[0]
             stats.append(stat)
         return stats
         
@@ -118,11 +123,13 @@ class PlatformStats(Resource):
         data = parser.parse_args()
         platform = data['platform']
         modules = get_module_headers()
-        stats = {}
+        stats = []
         for module in modules:
             query = f"SELECT * FROM session WHERE moduleID = {module[0]} AND platform = '{platform}'"
             sessions = query_sessions(query)
             stat = get_averages(sessions)
+            if not stat:
+                continue
             stat['module'] = module[1]
             stats.append(stat)
         return stats
