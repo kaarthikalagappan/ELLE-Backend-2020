@@ -52,7 +52,7 @@ def get_averages(sessions):
     stat = {}
     stat['averageScore'] = scoreTotal / len(sessions)
     # Session length in minutes
-    stat['averageSessionLength'] = timeTotal * 60 / len(sessions)
+    stat['averageSessionLength'] = (timeTotal / 60) / len(sessions)
     return stat
         
 
