@@ -67,7 +67,7 @@ def attach_question(module_id, question_id):
 		return True
 	else:
 		# Delete link if it exists
-		query = f'''DELETE FROM module_questions
+		query = f'''DELETE FROM module_question
 				WHERE moduleID = {module_id} AND questionID = {question_id}'''
 		post_to_db(query)
 		return False
@@ -196,10 +196,10 @@ class Module(Resource):
 		else:
 			complexity = 2
 		# Posting to database
-		query = f'''
+		query = f"""
 				INSERT INTO module (groupID, name, language, complexity)
 				VALUES ({group_id}, '{name}', '{language}', {complexity});
-				'''
+				"""
 		post_to_db(query)
 		return {'message' : 'Successfully added module!'}
 
@@ -218,11 +218,11 @@ class Module(Resource):
 		language = data['language']
 		complexity = data['complexity']
 		# Updating table
-		query = f'''
+		query = f"""
 				UPDATE module
 				SET name = '{name}', language = '{language}', complexity = '{complexity}'
 				WHERE moduleID = {module_id};
-				'''
+				"""
 		post_to_db(query)
 		return {'message' : 'Successfully updated module!'}
 		
@@ -286,9 +286,23 @@ class AttachTerm(Resource):
 				'''
 		result = get_from_db(query)
 		# If term or match question does not exist
+		question_id = -1
 		if not result or not result[0]:
-			return {'message' : 'Term does not exist or MATCH question has been deleted internally.'}, 400
-		question_id = result[0][0]
+			# Determining if term exists
+			result = get_from_db(f"SELECT front FROM term WHERE termID = {term_id}")
+			if result:
+				front = result[0]
+				# Creating a new MATCH question if missing (Only occurs for terms manually created through SQL)
+				post_to_db(f''' INSERT INTO question (`type`, `questionText`) VALUES ("MATCH", "What is the translation of {front}?")''')
+				query = "SELECT MAX(questionID) FROM question"
+				id_result = get_from_db(query)
+				question_id = check_max_id(id_result) - 1
+				post_to_db(f"INSERT INTO answer (`questionID`, `termID`) VALUES ({question_id}, {term_id})")
+			else:
+				return {'message' : 'Term does not exist or MATCH question has been deleted internally.'}, 400
+		# Getting question id if question already existed
+		if question_id == -1:
+			question_id = result[0][0]
 
 		# Attaching or detaching if already attached
 		attached = attach_question(module_id, question_id)

@@ -13,6 +13,7 @@ from db import mysql
 from db_utils import *
 from utils import *
 import json
+
 class Testing(Resource):
     def get(self):
         query = "SELECT * FROM user WHERE userID = 1"
@@ -28,3 +29,68 @@ class Testing(Resource):
             final_list.append(new_item)
 
         return final_list
+    
+    def post(self):
+        # print(request.data)
+        parser = reqparse.RequestParser()
+        parser.add_argument('questionID',
+		                          type=str,
+		                          required=True,
+		                          )
+        data = parser.parse_args()
+
+        array_of_objectss = request.form.getlist('array_of_objects')
+        # print(array_of_objectss)
+        for s in array_of_objectss:
+            # print("s: ", s)
+            s = json.loads(s)
+            print(s)
+            for _s in s:
+                print(_s)
+                # print(_s['city'])
+                # print(_s['people'])
+                for p in _s['people']:
+                    print(p)
+                # print(_s['population'])
+
+        # answer_list = request.form.getlist('new_answers')
+        # answer_list = json.loads(answer_list[0])
+        # for a in answer_list:
+        #     print(a)
+        # return answer_list
+
+        # print([json.loads(s) for s in array_of_objects])
+
+        # req = request.get_json().get('array_of_objects')
+        # # questionID = request.get_json().get('questionID')
+        # answer_list = request.get_json().get('answers')
+        # # print(req)
+        # # print(questionID)
+
+        # for r in req:
+        #     print(r)
+        #     print(r['city'])
+        #     print(r['people'])
+        #     for p in r['people']:
+        #         print(p)
+        #     print(r['population'])
+
+        # query = "SELECT * FROM `answer` WHERE questionID = %s"
+        # result = get_from_db(query, data['questionID'])
+        # # print(result)
+        # res = [row[1] for row in result]
+        # print(res)
+
+        # dif_list = list(set(res) ^ set(answer_list))
+        # return (dif_list)
+
+        # for e in dif_list:
+        #     if e in res:
+        #         print("remove ", e)
+        #     else:
+        #         print("add", e)
+
+
+
+
+        # print([json.loads(s) for s in array_of_objects])

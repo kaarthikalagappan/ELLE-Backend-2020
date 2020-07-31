@@ -13,7 +13,7 @@ from resources.logged_answer import LoggedAnswer
 from resources.sessions import Session, SearchSessions, End_Session
 from resources.question import Question, Answer, SearchType, SearchText, DeleteQuestion, DeleteAnswer, Modify
 from resources.modules import Modules, ModuleQuestions, Module, AttachQuestion, AttachTerm
-from resources.stats import ModuleStats
+from resources.stats import ModuleReport, ModuleStats, PlatformStats, PlatformNames
 from db import mysql
 from db_utils import *
 from pathlib import Path
@@ -94,8 +94,10 @@ api.add_resource(Session, '/session')
 api.add_resource(SearchSessions, '/searchsessions')
 api.add_resource(End_Session, '/endsession')
 api.add_resource(GameLog, '/gamelog')
+api.add_resource(ModuleReport, '/modulereport')
 api.add_resource(ModuleStats, '/modulestats')
-
+api.add_resource(PlatformStats, '/platformstats')
+api.add_resource(PlatformNames, '/platformnames')
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port='3000', debug=True)
