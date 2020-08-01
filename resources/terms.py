@@ -402,6 +402,26 @@ class Term(Resource):
                 #Add the given list of tags
                 if 'tag' in data and data['tag']:
                     addNewTags(data['tag'], maxID, conn, cursor)
+
+                #create a default question
+                typeQuestion = 'PHRASE' if data['type'] and (data['type'] == 'PH' or data['type'] == 'PHRASE') else 'MATCH'
+                questionText = "What is the translation of " + data['front'] + "?"
+                questionQuery = "INSERT INTO question (`type`, `questionText`) VALUES (%s, %s)"
+                post_to_db(questionQuery, (typeQuestion, questionText), conn, cursor)
+
+                #get the added question's ID
+                maxQuestionQuery = "SELECT MAX(questionID) FROM question"
+                result = get_from_db(maxQuestionQuery, None, conn, cursor)
+                questionMaxID = check_max_id(result) - 1
+
+                #link the term to the default question
+                insertAnswerQuery = "INSERT INTO answer (`questionID`, `termID`) VALUES (%s, %s)"
+                post_to_db(insertAnswerQuery, (int(questionMaxID), int(maxID)), conn, cursor)
+
+                #link the question to the module
+                insertModuleQuery = "INSERT INTO `module_question` (`moduleID`, `questionID`) VALUES (%s, %s)"
+                post_to_db(insertModuleQuery, (data['moduleID'], str(questionMaxID)), conn, cursor)
+
                 raise ReturnSuccess({"Message" : "Successfully created a term", "termID" : int(maxID)}, 201)
     
         except TermsException as error:
@@ -417,34 +437,6 @@ class Term(Resource):
             if(conn.open):
                 cursor.close()
                 conn.close()
-            #If they added a new term, create a default question, link the term to the question, \
-            #and add that question to the module
-            #NEED TO CLEAN THIS UP, NOT A PROPER WAY TO DO IT - MAYBE INTEGRATE IT WITHOUT CALLING ANOTHER REQUEST
-            if (not data['termID']) and data['moduleID']:
-                url = "http://0.0.0.0:3000/question"
-                payload = {
-                    'type' : 'PHRASE' if data['type'] and (data['type'] == 'PH' or data['type'] == 'PHRASE') else 'MATCH',
-                    'questionText' : "What is the translation of " + data['front'] + "?",
-                    "moduleID" : data['moduleID']
-                }
-                headers = {
-                    'Authorization': request.headers['Authorization']
-                }
-                response = (requests.request("POST", url, headers=headers, data = payload)).json()
-                if DEBUG:
-                    print(response)
-                if not response or 'questionID' not in response:
-                    raise TermsException("Error when trying to turn term into question", 500)
-
-                url = "http://0.0.0.0:3000/addAnswer"
-                payload = {'questionID': str(response['questionID']),
-                        'termID': str(maxID)}
-                answer_response = requests.request("POST", url, headers=headers, data = payload)
-                answer_response_json = answer_response.json()
-                # print(answer_response_json)
-                if (answer_response.status_code != 201 and answer_response.status_code != 200) \
-                or not answer_response_json or not answer_response_json['message']:
-                    raise TermsException("Error when trying to add term to question as answer", 500)
 
     @jwt_required
     def delete(self):

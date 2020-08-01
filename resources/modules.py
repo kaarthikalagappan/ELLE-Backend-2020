@@ -310,3 +310,4 @@ class AttachTerm(Resource):
 		if attached:
 			return {'message' : 'Term has been linked to module.'}, 201
 		else:
+			return {'message' : 'Term has been unlinked from module.'}, 200
