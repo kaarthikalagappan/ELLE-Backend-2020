@@ -87,6 +87,62 @@ class Session(Resource):
                 cursor.close()
                 conn.close()
 
+    
+    @jwt_required
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('sessionID',
+                            required = True,
+                            type = str,
+                            help = "ID of session needed to retrieve is required")
+        
+        data = parser.parse_args()
+
+        user_id = get_jwt_identity()
+        permission, valid_user = getUser(user_id)
+        if not valid_user:
+            return errorMessage("Not a valid user accessing this information!"), 401
+
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+            sessionData = {"session" : [], "logged_answers" : []}
+
+            query = f"SELECT session.*, module.name from `session` INNER JOIN module ON module.moduleID = session.moduleID WHERE \
+                      session.sessionID = {data['sessionID']}"
+            results = get_from_db(query, None, conn, cursor)
+            if results and results[0]:
+                sessionData['session'].append(convertSessionsToJSON(results[0]))
+            else:
+                raise SessionException("No sessions found for the given ID", 400)
+
+            query = f"SELECT * from logged_answer WHERE `sessionID` = {data['sessionID']}"
+            results = get_from_db(query, None, conn, cursor)
+            if results and results[0]:
+                for log in results:
+                    record = {
+                        'logID' : log[0],
+                        'questionID' : log[1],
+                        'termID' : log[2],
+                        'sessionID' : log[3],
+                        'correct' : log[4]
+                    }
+                    sessionData['logged_answers'].append(record)
+            raise ReturnSuccess(sessionData, 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except SessionException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
 class End_Session(Resource):
     @jwt_required
     def post(self):
@@ -137,60 +193,6 @@ class End_Session(Resource):
             if(conn.open):
                 cursor.close()
                 conn.close()
-
-    @jwt_required
-    def get(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('sessionID',
-                            required = True,
-                            type = str,
-                            help = "ID of session needed to retrieve is required")
-        
-        data = parser.parse_args()
-
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-        if not valid_user:
-            return errorMessage("Not a valid user accessing this information!"), 401
-
-        try:
-            conn = mysql.connect()
-            cursor = conn.cursor()
-            sessionData = {"session" : [], "logged_answers" : []}
-
-            query = f"SELECT * from `session` WHERE `sessionID` = {data['sessionID']}"
-            results = get_from_db(query, None, conn, cursor)
-            if results and results[0]:
-                sessionData['session'].append(convertSessionsToJSON(results[0]))
-            else:
-                raise SessionException("No sessions found for the given ID", 400)
-
-            query = f"SELECT * from logged_answer WHERE `sessionID` = {data['sessionID']}"
-            results = get_from_db(query, None, conn, cursor)
-            if results and results[0]:
-                for log in results:
-                    record = {
-                        'logID' : log[0],
-                        'questionID' : log[1],
-                        'termID' : log[2],
-                        'sessionID' : log[3],
-                        'correct' : log[4]
-                    }
-                    sessionData['logged_answers'].append(record)
-            raise ReturnSuccess(sessionData, 200)
-        except ReturnSuccess as success:
-            conn.commit()
-            return success.msg, success.returnCode
-        except SessionException as error:
-            conn.rollback()
-            return error.msg, error.returnCode
-        except Exception as error:
-            conn.rollback()
-            return errorMessage(str(error)), 500
-        finally:
-            if(conn.open):
-                cursor.close()
-                conn.close()
         
 
 class SearchSessions(Resource):
@@ -218,7 +220,8 @@ class SearchSessions(Resource):
 
             #only moduleID is passed, in so retrieve all sessions that match the given moduleID
             if data['moduleID'] and not data['userID']:
-                query = f"SELECT * from `session` WHERE `moduleID` = {data['moduleID']}"
+                query = f"SELECT session.*, module.name from `session` INNER JOIN module ON module.moduleID = session.moduleID WHERE \
+                          session.moduleID = {data['moduleID']}"
                 results = get_from_db(query, None, conn, cursor)
                 records = []
                 if results and results[0]:
@@ -230,7 +233,8 @@ class SearchSessions(Resource):
                     raise ReturnSuccess("No sessions found for the chosen module", 204)
             #both userID and moduleID was passed in, so retrieve session logs that match both of them
             elif data['moduleID'] and data['userID']:
-                query = f"SELECT * from `session` WHERE `userID` = {data['userID']} AND `moduleID` = {data['moduleID']}"
+                query = f"SELECT session.*, module.name from session INNER JOIN module ON module.moduleID = session.moduleID WHERE \
+                          session.userID = {data['userID']} AND session.moduleID = {data['moduleID']}"
                 results = get_from_db(query, None, conn, cursor)
                 records = []
                 if results and results[0]:
@@ -244,7 +248,8 @@ class SearchSessions(Resource):
             else:
                 if not data['userID']:
                     data['userID'] = user_id
-                query = f"SELECT * from `session` WHERE `userID` = {data['userID']}"
+                query = f"SELECT session.*, module.name from session INNER JOIN module ON module.moduleID = session.moduleID WHERE \
+                         `userID` = {data['userID']}"
                 results = get_from_db(query, None, conn, cursor)
                 records = []
                 if results and results[0]:
@@ -268,7 +273,7 @@ class SearchSessions(Resource):
 
 
 def convertSessionsToJSON(session):
-    if len(session) < 8:
+    if len(session) < 9:
         return errorMessage("passed wrong amount of values to convertSessionsToJSON, it needs all elements in session table")
     result = {
         'sessionID' : session[0],
@@ -278,6 +283,7 @@ def convertSessionsToJSON(session):
         'playerScore' : session[4],
         'startTime' : session[5],
         'endTime' : session[6],
-        'platform' : session[7]
+        'platform' : session[7],
+        'moduleName' : session[8]
     }
     return result
