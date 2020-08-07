@@ -50,6 +50,11 @@ class LoggedAnswer(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
+            if data['correct'] == '' or data['correct'].lower() == 'false':
+                data['correct'] = '0'
+            elif data['correct'].lower() == 'true':
+                data['correct'] = '1'
+
             query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`) \
                 VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']})"
             post_to_db(query, None, conn, cursor)

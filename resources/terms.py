@@ -405,7 +405,7 @@ class Term(Resource):
 
                 #create a default question
                 typeQuestion = 'PHRASE' if data['type'] and (data['type'] == 'PH' or data['type'] == 'PHRASE') else 'MATCH'
-                questionText = "What is the translation of " + data['front'] + "?"
+                questionText = "Match: " + data['front'] + "?"
                 questionQuery = "INSERT INTO question (`type`, `questionText`) VALUES (%s, %s)"
                 post_to_db(questionQuery, (typeQuestion, questionText), conn, cursor)
 
