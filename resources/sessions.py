@@ -207,6 +207,10 @@ class SearchSessions(Resource):
                             required = False,
                             type = str,
                             help = "moduleID of whose session logs are needed is required")
+        parser.add_argument('platform',
+                            required = False,
+                            type = str,
+                            help = "moduleID of whose session logs are needed is required")
         data = parser.parse_args()
 
         user_id = get_jwt_identity()
@@ -218,38 +222,66 @@ class SearchSessions(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            #only moduleID is passed, in so retrieve all sessions that match the given moduleID
-            if data['moduleID'] and not data['userID']:
-                query = f"SELECT session.*, module.name from `session` INNER JOIN module ON module.moduleID = session.moduleID WHERE \
-                          session.moduleID = {data['moduleID']}"
-                results = get_from_db(query, None, conn, cursor)
-                records = []
-                if results and results[0]:
-                    for session in results:
-                        records.append(convertSessionsToJSON(session))
-                if records:
-                    raise ReturnSuccess(records, 200)
-                else:
-                    raise ReturnSuccess("No sessions found for the chosen module", 204)
-            #both userID and moduleID was passed in, so retrieve session logs that match both of them
-            elif data['moduleID'] and data['userID']:
-                query = f"SELECT session.*, module.name from session INNER JOIN module ON module.moduleID = session.moduleID WHERE \
-                          session.userID = {data['userID']} AND session.moduleID = {data['moduleID']}"
-                results = get_from_db(query, None, conn, cursor)
-                records = []
-                if results and results[0]:
-                    for session in results:
-                        records.append(convertSessionsToJSON(session))
-                if records:
-                    raise ReturnSuccess(records, 200)
-                else:
-                    raise ReturnSuccess("No sessions found for chosen user who has played with the chosen module", 204)
-            #only userID was passed in or the current user is getting their own session logs
+            # If any data is not provided, change it to a regular expression
+            # that selects everything in order to ignore that as a condition
+            # "REGEXP '.*'" selects everything
+            if not data['moduleID'] or data['moduleID'] == '':
+                data['moduleID'] = "REGEXP '.*'"
             else:
-                if not data['userID']:
-                    data['userID'] = user_id
-                query = f"SELECT session.*, module.name from session INNER JOIN module ON module.moduleID = session.moduleID WHERE \
-                         `userID` = {data['userID']}"
+                data['moduleID'] = "= '" + str(data['moduleID']) + "'"
+            
+            if not data['userID'] or data['userID'] == '':
+                data['userID'] = "= '" + str(user_id) + "'"
+            else:
+                data['userID'] = "= '" + str(data['userID']) + "'"
+
+            if not data['platform'] or data['platform'] == '':
+                data['platform'] = "REGEXP '.*'"
+            else:
+                data['platform'] = "= '" + str(data['platform']) + "'"
+
+            query = f"""SELECT session.*, module.name from `session`
+                    INNER JOIN module on module.moduleID = session.moduleID
+                    WHERE session.moduleID {data['moduleID']} 
+                    AND session.userID {data['userID']} 
+                    AND session.platform {data['platform']}"""
+            results = get_from_db(query, None, conn, cursor)
+            records = []
+            if results and results[0]:
+                for session in results:
+                    records.append(convertSessionsToJSON(session))
+            if records:
+                raise ReturnSuccess(records, 200)
+            else:
+                raise ReturnSuccess("No sessions found for the user", 204)
+
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
+class GetAllSessions(Resource):
+    @jwt_required
+    def get(self):
+        parser = reqparse.RequestParser()
+        data = parser.parse_args()
+
+        user_id = get_jwt_identity()
+        permission, valid_user = getUser(user_id)
+
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            # REMINDER: currently using ad, update to what super user is set to
+            if permission == 'ad':
+                query = f"SELECT session.*, module.name from `session` INNER JOIN module ON module.moduleID"
                 results = get_from_db(query, None, conn, cursor)
                 records = []
                 if results and results[0]:
@@ -258,8 +290,7 @@ class SearchSessions(Resource):
                 if records:
                     raise ReturnSuccess(records, 200)
                 else:
-                    raise ReturnSuccess("No sessions found for the user", 204)
-
+                    raise ReturnSuccess("No sessions found for the chosen module", 210)
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode

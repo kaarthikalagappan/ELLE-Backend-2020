@@ -7,10 +7,10 @@ import config
 from flask_cors import CORS
 from resources.testing import Testing
 from resources.user import UserRegister, Users, UserLogin, UserLogout, User, ResetPassword, CheckIfActive, UsersHighscores
-from resources.terms import Term, Tags, Tag_Term, Tags_In_Term
+from resources.terms import Term, Tags, Tag_Term, Tags_In_Term, Specific_Term
 from resources.game_logs import GameLog
 from resources.logged_answer import LoggedAnswer
-from resources.sessions import Session, SearchSessions, End_Session
+from resources.sessions import Session, SearchSessions, End_Session, GetAllSessions
 from resources.question import Question, Answer, SearchType, SearchText, DeleteQuestion, DeleteAnswer, Modify
 from resources.modules import Modules, ModuleQuestions, Module, AttachQuestion, AttachTerm
 from resources.stats import ModuleReport, ModuleStats, PlatformStats, PlatformNames
@@ -77,6 +77,7 @@ api.add_resource(Term, '/term')
 api.add_resource(Tags, '/tags')
 api.add_resource(Tag_Term, '/tag_term')
 api.add_resource(Tags_In_Term, '/tags_in_term')
+api.add_resource(Specific_Term, '/specificterm')
 api.add_resource(Question, '/question')
 api.add_resource(Answer, '/addAnswer')
 api.add_resource(SearchType,'/searchbytype')
@@ -98,6 +99,7 @@ api.add_resource(ModuleReport, '/modulereport')
 api.add_resource(ModuleStats, '/modulestats')
 api.add_resource(PlatformStats, '/platformstats')
 api.add_resource(PlatformNames, '/platformnames')
+api.add_resource(GetAllSessions, '/getallsessions')
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port='3000', debug=True)

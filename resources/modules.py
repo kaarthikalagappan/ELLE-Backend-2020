@@ -3,13 +3,11 @@
 from flask import send_file, request, json
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_raw_jwt
+from config import IMG_RETRIEVE_FOLDER, AUD_RETRIEVE_FOLDER
 from db import mysql
 from db_utils import *
 from utils import *
 import os.path
-
-IMG_RETRIEVE_FOLDER = '/Images/'
-AUD_RETRIEVE_FOLDER = '/Audios/'
 
 # Gets the group associated with the current user
 def get_user_group():

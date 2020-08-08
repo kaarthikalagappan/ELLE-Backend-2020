@@ -10,22 +10,17 @@ from flask_jwt_extended import (
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flaskext.mysql import MySQL
-
+from config import (
+    IMAGE_EXTENSIONS, AUDIO_EXTENSIONS, TEMP_DELETE_FOLDER,
+    TEMP_UPLOAD_FOLDER, IMG_UPLOAD_FOLDER, AUD_UPLOAD_FOLDER,
+    IMG_RETRIEVE_FOLDER, AUD_RETRIEVE_FOLDER
+    )
 from db import mysql
 from db_utils import *
 from utils import *
 import json
 import datetime
 import time
-
-IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'PNG']
-AUDIO_EXTENSIONS = ['ogg', 'wav', 'mp3']
-TEMP_UPLOAD_FOLDER = 'uploads/'
-TEMP_DELETE_FOLDER = 'deletes/'
-IMG_UPLOAD_FOLDER = '/var/www/html/Images/'
-AUD_UPLOAD_FOLDER = '/var/www/html/Audios/'
-IMG_RETRIEVE_FOLDER = '/Images/'
-AUD_RETRIEVE_FOLDER = '/Audios/'
 
 DEBUG = True
 

@@ -1,6 +1,11 @@
 # -*- encoding: utf-8 -*-
 
 from flask import request
+from config import (
+    IMAGE_EXTENSIONS, AUDIO_EXTENSIONS, TEMP_DELETE_FOLDER,
+    TEMP_UPLOAD_FOLDER, IMG_UPLOAD_FOLDER, AUD_UPLOAD_FOLDER,
+    IMG_RETRIEVE_FOLDER, AUD_RETRIEVE_FOLDER
+    )
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
@@ -8,19 +13,11 @@ from flaskext.mysql import MySQL
 from db import mysql
 from db_utils import *
 from utils import *
+from datetime import date
 import os
 import time
 import requests
-from datetime import date
 
-IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg']
-AUDIO_EXTENSIONS = ['ogg', 'wav', 'mp3']
-TEMP_UPLOAD_FOLDER = 'uploads/'
-TEMP_DELETE_FOLDER = 'deletes/'
-IMG_UPLOAD_FOLDER = '/var/www/html/Images/'
-AUD_UPLOAD_FOLDER = '/var/www/html/Audios/'
-IMG_RETRIEVE_FOLDER = '/Images/'
-AUD_RETRIEVE_FOLDER = '/Audios/'
 
 #Set it to True to see some extra information printed to the console for debugging purposes
 DEBUG = True
@@ -607,6 +604,55 @@ class Tag_Term(Resource):
                 cursor.close()
                 conn.close()
 
+class Specific_Term(Resource):
+    @jwt_required
+    #Get a specific term given it's termID
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('termID',
+                            required = True,
+                            type = str,
+                            help = "ID of the term whose tags need to be retrieved is required")
+        data = parser.parse_args()
+
+        user_id = get_jwt_identity()
+        permission, valid_user = getUser(user_id)
+
+        if not valid_user:
+            return errorMessage("Not a valid user!"), 401
+
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            if not data['termID'] or data['termID'] == '':
+                raise TermsException("Please provide a termID", 406)
+
+            query = "SELECT term.*, image.imageLocation, audio.audioLocation FROM `term` \
+                    LEFT JOIN image ON image.imageID = term.imageID \
+                    LEFT JOIN audio ON audio.audioID = term.audioID \
+                    WHERE term.termID = %s"
+            term_from_db = get_from_db(query, str(data['termID']), conn, cursor)
+            print(term_from_db)
+            term = []
+            if term_from_db and term_from_db[0]:        
+                raise ReturnSuccess(convertToJSON(term_from_db[0]), 200)
+            else:
+                raise TermsException("Term not found", 404)
+
+        except TermsException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error), DEBUG), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
 class Tags_In_Term(Resource):
     @jwt_required
     #Get terms associated with a specific tagName
@@ -629,7 +675,7 @@ class Tags_In_Term(Resource):
             cursor = conn.cursor()
 
             if not data['termID'] or data['termID'] == '':
-                raise TermsException("Please provide a tag name", 406)
+                raise TermsException("Please provide a termID", 406)
 
             query = "SELECT tagName FROM `tag` WHERE termID = %s"
             tags_from_db = get_from_db(query, str(data['termID']), conn, cursor)

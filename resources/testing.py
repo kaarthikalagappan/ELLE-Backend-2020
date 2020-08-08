@@ -9,6 +9,11 @@ from flask_jwt_extended import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from flaskext.mysql import MySQL
+from config import (
+    IMAGE_EXTENSIONS, AUDIO_EXTENSIONS, TEMP_DELETE_FOLDER,
+    TEMP_UPLOAD_FOLDER, IMG_UPLOAD_FOLDER, AUD_UPLOAD_FOLDER,
+    IMG_RETRIEVE_FOLDER, AUD_RETRIEVE_FOLDER
+    )
 from db import mysql
 from db_utils import *
 from utils import *
@@ -27,6 +32,14 @@ class Testing(Resource):
             new_item['username'] = row[1] 
             new_item['permissions'] = row[4]
             final_list.append(new_item)
+        final_list.append(IMAGE_EXTENSIONS)
+        final_list.append(AUDIO_EXTENSIONS)
+        final_list.append(IMG_RETRIEVE_FOLDER)
+        final_list.append(AUD_RETRIEVE_FOLDER)
+        final_list.append(IMG_UPLOAD_FOLDER)
+        final_list.append(AUD_UPLOAD_FOLDER)
+        final_list.append(TEMP_DELETE_FOLDER)
+        final_list.append(TEMP_UPLOAD_FOLDER)
 
         return final_list
     
