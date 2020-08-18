@@ -120,7 +120,7 @@ class UserLogin(Resource):
 		                          required=True,
 		                          )
         data = user_parser.parse_args()
-
+        data['username'] = data['username'].lower()
         find_user, user = find_by_name(data['username'])
         if find_user:
             if check_password_hash(user[2], data['password']):
@@ -171,6 +171,8 @@ class UserRegister(Resource):
         #adds user to the database if passwords match and username isn't taken
         if data['password'] != data['password_confirm']:
             return {'message':'Passwords do not match.'},400
+
+        data['username'] = data['username'].lower()
 
         find_user, user = find_by_name(data['username'])
         if find_user == True:
