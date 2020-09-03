@@ -277,24 +277,15 @@ class Module(Resource):
 		# groupID doesn't need to be passed is superadmin is creating a new module
 		# and doesn't want to attach it to any groups
 		group_id = get_group_id()
-		user_id = get_jwt_identity()
-		permission = get_jwt_claims()
-		if not permission or permission == "":
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
 			return "Invalid user", 401
 
 		if not group_id and permission != 'su':
 			return {'message':'Please provide the id of a group'}, 400
 
-		if permission == 'st':
-			query = f"""
-					SELECT accessLevel from group_user 
-					WHERE userID = {user_id} AND
-					groupID = {group_id}
-					"""
-			accessLevel = get_from_db(query)
-			print(accessLevel)
-			if accessLevel and accessLevel[0] and accessLevel[0][0] != 'ta':
-				return "User not authorized to do this", 401
+		if permission == 'st' and not check_ta_status(user_id, group_id):
+			return "User not authorized to do this", 401
 		
 		# Parsing JSON
 		parser = reqparse.RequestParser()
@@ -333,22 +324,12 @@ class Module(Resource):
 		# groupID doesn't need to be passed if professor or superadmin is updating a module
 		group_id = get_group_id()
 
-		permission = get_jwt_claims()
-		if not permission or permission == "":
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
 			return "Invalid user", 401
 		
-		if permission == 'st':
-			if not group_id:
-				return "Pass in groupID if user is a TA for the group", 400
-			query = f"""
-					SELECT accessLevel from group_user 
-					WHERE userID = {user_id} AND
-					groupID = {group_id}
-					"""
-			accessLevel = get_from_db(query)
-			print(accessLevel)
-			if accessLevel and accessLevel[0] and accessLevel[0][0] != 'ta':
-				return "User not authorized to do this", 401
+		if permission == 'st' and not check_ta_status(user_id, group_id):
+			return "User not authorized to do this", 401
 		
 		# Parsing JSON
 		parser = reqparse.RequestParser()
@@ -376,23 +357,12 @@ class Module(Resource):
 	def delete(self):
 		# groupID only needs to be passed if the user is a TA for the group
 		group_id = get_group_id()
-		user_id = get_jwt_identity()
-		permission = get_jwt_claims()
-		if not permission or permission == "":
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
 			return "Invalid user", 401
 
-		if permission == 'st':
-			if not group_id:
-				return "Pass in groupID if user is a TA for the group", 400
-			query = f"""
-					SELECT accessLevel from group_user 
-					WHERE userID = {user_id} AND
-					groupID = {group_id}
-					"""
-			accessLevel = get_from_db(query)
-			print(accessLevel)
-			if accessLevel and accessLevel[0] and accessLevel[0][0] != 'ta':
-				return "User not authorized to do this", 401
+		if permission == 'st' and not check_ta_status(user_id, group_id):
+			return "User not authorized to do this", 401
 		
 		module_id = get_module_id()
 		if not module_id:
@@ -417,23 +387,12 @@ class AttachQuestion(Resource):
 	def post(self):
 		# groupID only needs to be passed if the user is a TA for the group
 		group_id = get_group_id()
-		user_id = get_jwt_identity()
-		permission = get_jwt_claims()
-		if not permission or permission == "":
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
 			return "Invalid user", 401
 
-		if permission == 'st':
-			if not group_id:
-				return "Pass in groupID if user is a TA for the group", 400
-			query = f"""
-					SELECT accessLevel from group_user 
-					WHERE userID = {user_id} AND
-					groupID = {group_id}
-					"""
-			accessLevel = get_from_db(query)
-			print(accessLevel)
-			if accessLevel and accessLevel[0] and accessLevel[0][0] != 'ta':
-				return "User not authorized to do this", 401
+		if permission == 'st' and not check_ta_status(user_id, group_id):
+			return "User not authorized to do this", 401
 		
 		# Parsing JSON
 		parser = reqparse.RequestParser()
@@ -457,23 +416,12 @@ class AttachTerm(Resource):
 	def post(self):
 		# groupID only needs to be passed if the user is a TA for the group
 		group_id = get_group_id()
-		user_id = get_jwt_identity()
-		permission = get_jwt_claims()
-		if not permission or permission == "":
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
 			return "Invalid user", 401
 
-		if permission == 'st':
-			if not group_id:
-				return "Pass in groupID if user is a TA for the group", 400
-			query = f"""
-					SELECT accessLevel from group_user 
-					WHERE userID = {user_id} AND
-					groupID = {group_id}
-					"""
-			accessLevel = get_from_db(query)
-			print(accessLevel)
-			if accessLevel and accessLevel[0] and accessLevel[0][0] != 'ta':
-				return "User not authorized to do this", 401
+		if permission == 'st' and not check_ta_status(user_id, group_id):
+			return "User not authorized to do this", 401
 
 		# Parsing JSON
 		parser = reqparse.RequestParser()
@@ -526,21 +474,13 @@ class AddModuleGroup(Resource):
 		parser.add_argument('groupID', type=int, required=True)
 		data = parser.parse_args()
 
-		user_id = get_jwt_identity()
-		permission = get_jwt_claims()
-		if not permission or permission=="":
-			return "Not a valid user", 401
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
+			return "Invalid user", 401
 
-		if permission == 'st':
-			query = f"""
-					SELECT accessLevel from group_user 
-					WHERE userID = {user_id} AND
-					groupID = {data['groupID']}
-					"""
-			accessLevel = get_from_db(query)
-			print(accessLevel)
-			if accessLevel and accessLevel[0] and accessLevel[0][0] != 'ta':
-				return "User not authorized to do this", 401
+		if permission == 'st' and not check_ta_status(user_id, group_id):
+			return "User not authorized to do this", 401
+		
 		try:
 			conn = mysql.connect()
 			cursor = conn.cursor()
