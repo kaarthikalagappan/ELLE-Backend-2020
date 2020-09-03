@@ -1,9 +1,11 @@
+import os
+
 # Database configurations
-MYSQL_DATABASE_USER = 'DB_USERNAME'
-MYSQL_DATABASE_PASSWORD = 'DB_PASSWORD'
-MYSQL_DATABASE_DB = 'DB_NAME'
-MYSQL_DATABASE_HOST = 'DB_HOST(LOCALHOST)'
-SECRET_KEY = 'SECRET_KEY'
+MYSQL_DATABASE_USER = os.getenv('MYSQL_DATABASE_USER')
+MYSQL_DATABASE_PASSWORD = os.getenv('MYSQL_DATABASE_PASSWORD')
+MYSQL_DATABASE_DB = os.getenv('MYSQL_DATABASE_DB')
+MYSQL_DATABASE_HOST = os.getenv('MYSQL_DATABASE_HOST')
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # Allowed image and audio extensions
 IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'PNG', 'JPEG', 'JPG']
@@ -19,3 +21,9 @@ AUD_UPLOAD_FOLDER = '/var/www/html/Audios/'
 # is accessible publicly (https://endlesslearner.com/Images/...)
 IMG_RETRIEVE_FOLDER = '/Images/'
 AUD_RETRIEVE_FOLDER = '/Audios/'
+
+# List of user permission types
+# Changing these values is not recommended
+PERMISSION_GROUPS = ['su', 'pf', 'st'] #Permission groups of individual users
+ACCESS_LEVELS = ['pf', 'st', 'ta'] #Permission groups of users in a group context
+PERMISSION_LEVELS = list(set(ACCESS_LEVELS+PERMISSION_GROUPS)) #All available permission levels

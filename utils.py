@@ -7,6 +7,11 @@ import shutil
 import csv
 import subprocess
 import ffmpeg
+from flask_jwt_extended import (
+    get_jwt_identity,
+    get_jwt_claims
+)
+from config import PERMISSION_LEVELS, PERMISSION_GROUPS, ACCESS_LEVELS
 
 ########################################################################################
 # DECKS FUNCTIONS
@@ -178,14 +183,48 @@ def getUser(_id):
 	permission = get_from_db(query)
 
 	if not permission:
-		return 'nil', False
+		return None, False
 	
 	permission = permission[0][0]
 
-	if permission == 'ad':
-		return 'ad', True
+	if permission not in PERMISSION_LEVELS:
+		#This should never be the case, but as a safeguard
+		return permission, None
 	else:
-		return 'st', True
+		return permission, True
+
+def validate_permissions():
+	# Checks and validates permission group and user id from jwt token
+	# Returns permission group and user id
+	permission = get_jwt_claims()
+	user_id = get_jwt_identity()
+
+	if not user_id or user_id == '' or \
+	   not permission or permission == '' or \
+	   permission not in PERMISSION_LEVELS:
+		return None, None
+	else:
+		return permission, user_id
+
+def check_ta_status(user_id, group_id):
+	# checks if the user if a TA for the group
+	# returns true or false
+	if not user_id or not group_id:
+		return False
+	
+	query = f"""
+			SELECT accessLevel from group_user 
+			WHERE userID = {user_id} AND
+			groupID = {group_id}
+			"""
+	accessLevel = get_from_db(query)
+	if accessLevel and accessLevel[0]:
+		if accessLevel[0][0] != 'ta':
+			return False
+		else:
+			return True
+
+	return False
 
 ########################################################################################
 # ALL FUNCTIONS
