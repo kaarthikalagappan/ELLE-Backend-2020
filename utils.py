@@ -206,7 +206,7 @@ def validate_permissions():
 	else:
 		return permission, user_id
 
-def check_ta_status(user_id, group_id):
+def is_ta(user_id, group_id):
 	# checks if the user if a TA for the group
 	# returns true or false
 	if not user_id or not group_id:

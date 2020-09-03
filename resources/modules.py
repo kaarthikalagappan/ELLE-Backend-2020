@@ -2,7 +2,7 @@
 
 from flask import send_file, request, json
 from flask_restful import Resource, reqparse
-from flask_jwt_extended import jwt_required, get_jwt_identity, get_raw_jwt, get_jwt_claims
+from flask_jwt_extended import jwt_required
 from config import IMG_RETRIEVE_FOLDER, AUD_RETRIEVE_FOLDER
 from db import mysql
 from db_utils import *
@@ -85,12 +85,13 @@ def attach_question(module_id, question_id):
 
 
 class Modules(Resource):
-
 	# For acquiring all modules available for the current user
 	# based on the user's registered groups
 	@jwt_required
 	def get(self):
-		user_id = get_jwt_identity()
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
+			return "Invalid user", 401
 
 		query = f"""
 				SELECT `module`.*, `group_module`.`groupID` FROM `module` 
@@ -102,27 +103,19 @@ class Modules(Resource):
 
 		modules = []
 		for row in result:
-			module = {}
-			module['moduleID'] = row[0]
-			module['name'] = row[1]
-			module['language'] = row[2]
-			module['complexity'] = row[3]
-			module['groupID'] = row[4]
-			modules.append(module) 
+			modules.append(convertToJSON(row)) 
 		
 		# Return module information
 		return modules
 
 
 class RetrieveGroupModules(Resource):
-
 	# Get all modules associated with the given groupID
 	@jwt_required
 	def get(self):
 		# Get the user's ID and check permissions
-		user_id = get_jwt_identity()
-		permission = get_jwt_claims()
-		if not permission or permission == "":
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
 			return "Invalid user", 401
 		
 		group_id = get_group_id()
@@ -137,29 +130,52 @@ class RetrieveGroupModules(Resource):
 		records = get_from_db(query)
 		modules = []
 		for row in records:
-			module = {}
-			module['moduleID'] = row[0]
-			module['name'] = row[1]
-			module['language'] = row[2]
-			module['complexity'] = row[3]
-			modules.append(module) 
+			modules.append(convertToJSON(row)) 
 		
 		# Return module information
 		return modules
 
 
-class RetrieveAllModules(Resource):
+class SearchModules(Resource):
+	#Retrieve modules that matches the given language parameter
+	@jwt_required
+	def get(self):
+		# Get the user's ID and check permissions
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
+			return "Invalid user", 401
 
+		parser = reqparse.RequestParser()
+		parser.add_argument('language', type=str, required=True)
+		data = parser.parse_args()
+
+		query = f"""
+				SELECT module.*, group_module.groupID FROM module 
+				INNER JOIN group_module ON group_module.moduleID=module.moduleID 
+				WHERE module.language='{data['language']}'
+				"""
+		records = get_from_db(query)
+		modules = []
+		for row in records:
+			modules.append(convertToJSON(row)) 
+		
+		# Return module information
+		return modules
+		
+
+
+class RetrieveAllModules(Resource):
 	# Get all modules in the database
 	@jwt_required
 	def get(self):
 		# Get the user's ID and check permissions
-		user_id = get_jwt_identity()
-		permission = get_jwt_claims()
-		if not permission or permission == "":
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
 			return "Invalid user", 401
+		
+		group_id = get_group_id()
 
-		if permission != 'su' and permission != 'pf':
+		if permission == 'st' and not is_ta(user_id, group_id):
 			return "Invalid permission level", 401
 
 		# Query to retrieve all modules
@@ -169,25 +185,19 @@ class RetrieveAllModules(Resource):
 		# Attaching variable names to rows
 		modules = []
 		for row in result:
-			module = {}
-			module['moduleID'] = row[0]
-			# module['groupID'] = row[1]
-			module['name'] = row[1]
-			module['language'] = row[2]
-			module['complexity'] = row[3]
-			modules.append(module) 
+			modules.append(convertToJSON(row)) 
 		# Return module information
 		return modules
 
+
 # For acquiring the associated questions and answers with a module
 class ModuleQuestions(Resource):
-
 	# Get a list of question objects, which each contain a list of terms functioning as their answers
 	# Requires moduleID
 	@jwt_required
 	def post(self):
-		permission = get_jwt_claims()
-		if not permission or permission == "":
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
 			return "Invalid user", 401
 		
 		module_id = get_module_id()
@@ -242,15 +252,14 @@ class Module(Resource):
 	@jwt_required
 	# Getting an existing module
 	def get(self):
-		permission = get_jwt_claims()
-		if not permission or permission == "":
+		permission, user_id = validate_permissions()
+		if not permission or not user_id:
 			return "Invalid user", 401
 		
 		module_id = get_module_id()
 		if not module_id:
 			return {'message':'Please provide the id of a module'}, 400
-		# Find user's userID from jwt token
-		user_id = get_jwt_identity()
+		
 		# Get all decks associated with the group
 		query = f'''
 				SELECT module.*, group_module.groupID FROM module 
@@ -259,15 +268,13 @@ class Module(Resource):
 				WHERE group_user.userID={user_id} AND module.moduleID={module_id}
 				'''
 		result = get_from_db(query)
-		# Attaching variable names to rows
-		module = {}
+
+		module = None
 
 		if result and result[0]:
-			module['moduleID'] = result[0][0]
-			module['name'] = result[0][1]
-			module['language'] = result[0][2]
-			module['complexity'] = result[0][3]
-			module['groupID'] = result[0][4]
+			# Attaching variable names to rows\
+			module = convertToJSON(result[0])
+		
 		# Return module information
 		return module
 
@@ -284,7 +291,7 @@ class Module(Resource):
 		if not group_id and permission != 'su':
 			return {'message':'Please provide the id of a group'}, 400
 
-		if permission == 'st' and not check_ta_status(user_id, group_id):
+		if permission == 'st' and not is_ta(user_id, group_id):
 			return "User not authorized to do this", 401
 		
 		# Parsing JSON
@@ -328,7 +335,7 @@ class Module(Resource):
 		if not permission or not user_id:
 			return "Invalid user", 401
 		
-		if permission == 'st' and not check_ta_status(user_id, group_id):
+		if permission == 'st' and not is_ta(user_id, group_id):
 			return "User not authorized to do this", 401
 		
 		# Parsing JSON
@@ -361,7 +368,7 @@ class Module(Resource):
 		if not permission or not user_id:
 			return "Invalid user", 401
 
-		if permission == 'st' and not check_ta_status(user_id, group_id):
+		if permission == 'st' and not is_ta(user_id, group_id):
 			return "User not authorized to do this", 401
 		
 		module_id = get_module_id()
@@ -391,7 +398,7 @@ class AttachQuestion(Resource):
 		if not permission or not user_id:
 			return "Invalid user", 401
 
-		if permission == 'st' and not check_ta_status(user_id, group_id):
+		if permission == 'st' and not is_ta(user_id, group_id):
 			return "User not authorized to do this", 401
 		
 		# Parsing JSON
@@ -420,7 +427,7 @@ class AttachTerm(Resource):
 		if not permission or not user_id:
 			return "Invalid user", 401
 
-		if permission == 'st' and not check_ta_status(user_id, group_id):
+		if permission == 'st' and not is_ta(user_id, group_id):
 			return "User not authorized to do this", 401
 
 		# Parsing JSON
@@ -478,7 +485,7 @@ class AddModuleGroup(Resource):
 		if not permission or not user_id:
 			return "Invalid user", 401
 
-		if permission == 'st' and not check_ta_status(user_id, group_id):
+		if permission == 'st' and not is_ta(user_id, group_id):
 			return "User not authorized to do this", 401
 		
 		try:
@@ -523,3 +530,19 @@ class AddModuleGroup(Resource):
 			if(conn.open):
 				cursor.close()
 				conn.close()
+
+
+def convertToJSON(moduleRecord):
+	if len(moduleRecord) < 4:
+		return errorMessage("Wrong amount of values in the object. Module record has 4 fields, or 5 with groupID")
+	
+	moduleObj = {}
+	moduleObj['moduleID'] = moduleRecord[0]
+	moduleObj['name'] = moduleRecord[1]
+	moduleObj['language'] = moduleRecord[2]
+	moduleObj['complexity'] = moduleRecord[3]
+
+	if len(moduleRecord) > 4:
+		moduleObj['groupID'] = moduleRecord[4]
+	
+	return moduleObj

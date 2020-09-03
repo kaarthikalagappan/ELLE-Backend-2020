@@ -7,10 +7,7 @@ from db import mysql
 from db_utils import *
 from utils import *
 from datetime import date
-
-# List of permission levels that a user can be associated with
-# TA permission level is only used in group context
-PERMISSION_LEVELS = ['su', 'pf', 'ta', 'st']
+from config import PERMISSION_LEVELS
 
 
 class CustomException(Exception):

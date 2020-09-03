@@ -5,7 +5,8 @@ from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required,
     get_raw_jwt,
-    get_current_user
+    get_current_user,
+    get_jwt_claims
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from flaskext.mysql import MySQL
@@ -107,3 +108,11 @@ class Testing(Resource):
 
 
         # print([json.loads(s) for s in array_of_objects])
+
+class JWTTest(Resource):
+    @jwt_required
+    def get(self):
+        user_id = get_jwt_identity()
+        permission = get_jwt_claims()
+
+        return {"user_id": user_id, "permission" : permission}
