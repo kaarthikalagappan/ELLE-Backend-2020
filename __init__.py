@@ -5,15 +5,17 @@ from flask_jwt_extended import JWTManager
 from flaskext.mysql import MySQL
 import config
 from flask_cors import CORS
-from resources.testing import Testing
+from resources.testing import Testing, JWTTest
 from resources.user import UserRegister, Users, UserLogin, UserLogout, User, ResetPassword, CheckIfActive, UsersHighscores
 from resources.terms import Term, Tags, Tag_Term, Tags_In_Term, Specific_Term
 from resources.game_logs import GameLog
 from resources.logged_answer import LoggedAnswer
 from resources.sessions import Session, SearchSessions, End_Session, GetAllSessions
 from resources.question import Question, Answer, SearchType, SearchText, DeleteQuestion, DeleteAnswer, Modify
-from resources.modules import Modules, ModuleQuestions, Module, AttachQuestion, AttachTerm
+from resources.modules import Modules, ModuleQuestions, Module, AttachQuestion, AttachTerm, RetrieveAllModules, RetrieveGroupModules, AddModuleGroup, SearchModules
 from resources.stats import ModuleReport, ModuleStats, PlatformStats, PlatformNames
+from resources.access import Access
+from resources.group import Group, GroupRegister, SearchUserGroups, UsersInGroup
 from db import mysql
 from db_utils import *
 from pathlib import Path
@@ -46,6 +48,21 @@ def page_not_found(e):
 	resp = Response(render_template('/var/www/html/index.html'), mimetype='text/html')
 	return resp
 
+
+# Given a complex object, this returns the permossion group
+# stored in it when get_jwt_identity() is called
+@jwt.user_claims_loader
+def add_claims_to_access_token(user):
+    return user.permissionGroup
+
+
+# Given a complex object, this returns the user id stored in it
+# when get_jwt_claims() is called
+@jwt.user_identity_loader
+def user_identity_lookup(user):
+    return user.user_id
+
+
 class HomePage(Resource):
 
 	def get(self):
@@ -65,6 +82,7 @@ def check_if_token_in_blacklist(decrypted_token):
     	return False
 
 api.add_resource(Testing, '/newTest')
+api.add_resource(JWTTest, '/jwttest')
 api.add_resource(UserRegister, '/register')
 api.add_resource(Users, '/users')
 api.add_resource(UserLogin, '/login')
@@ -88,6 +106,10 @@ api.add_resource(Modify, '/modifyquestion')
 api.add_resource(Modules,'/modules')
 api.add_resource(ModuleQuestions,'/modulequestions')
 api.add_resource(Module,'/module')
+api.add_resource(RetrieveAllModules, '/retrievemodules')
+api.add_resource(RetrieveGroupModules, '/retrievegroupmodules')
+api.add_resource(AddModuleGroup, '/addmoduletogroup')
+api.add_resource(SearchModules, '/searchmodules')
 api.add_resource(AttachQuestion, '/attachquestion')
 api.add_resource(AttachTerm, '/attachterm')
 api.add_resource(LoggedAnswer, '/loggedanswer')
@@ -100,6 +122,11 @@ api.add_resource(ModuleStats, '/modulestats')
 api.add_resource(PlatformStats, '/platformstats')
 api.add_resource(PlatformNames, '/platformnames')
 api.add_resource(GetAllSessions, '/getallsessions')
+api.add_resource(Access, '/elevateaccess')
+api.add_resource(Group, '/group')
+api.add_resource(GroupRegister, '/groupregister')
+api.add_resource(SearchUserGroups, '/searchusergroups')
+api.add_resource(UsersInGroup, '/usersingroup')
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port='3000', debug=True)
