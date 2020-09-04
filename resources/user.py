@@ -15,6 +15,29 @@ from utils import *
 import json
 import datetime
 
+class CustomException(Exception):
+    pass
+
+
+class ReturnSuccess(Exception):
+    def __init__(self, msg, returnCode):
+        # Message is stored formatted in msg and response code stored in returnCode
+        if isinstance(msg, str):
+            self.msg = returnMessage(msg)
+        else:
+            self.msg = msg
+        self.returnCode = returnCode
+
+
+class UserException(Exception):
+    def __init__(self, msg, returnCode):
+        # Error message is stored formatted in msg and response code stored in returnCode
+        if isinstance(msg, str):
+            self.msg = errorMessage(msg)
+        else:
+            self.msg = msg
+        self.returnCode = returnCode
+
 def find_by_name(username):
 
 	query = "SELECT * FROM user WHERE username=%s"
@@ -48,6 +71,18 @@ def check_user_db(_id):
 
 	return False
 
+
+
+# A complex object that stores the user's userID and permissionGroup
+# that'll be stored in the JWT token
+class UserObject:
+    def __init__(self, user_id, permissionGroup):
+        self.user_id = user_id
+        self.permissionGroup = permissionGroup
+
+
+
+#TODO: GOT TO CHANGE THIS LOGIC AS GROUPID ISN'T REQUIRED - JUST THE groupCode
 def check_group_db(id, password):
     query = "SELECT * FROM `group` WHERE `groupID`=%s"
     result = get_from_db(query, (id,))
@@ -126,7 +161,8 @@ class UserLogin(Resource):
             if check_password_hash(user[2], data['password']):
                 put_in_blacklist(user[0])
                 expires = datetime.timedelta(days=14)
-                access_token = create_access_token(identity=user[0], expires_delta=expires)
+                user_obj = UserObject(user_id=user[0], permissionGroup=user[4])
+                access_token = create_access_token(identity=user_obj, expires_delta=expires)
                 query = "UPDATE `user` SET `lastToken`=%s WHERE `userID` =%s"
                 post_to_db(query, (access_token , user[0]))
                 return {
@@ -157,42 +193,63 @@ class UserRegister(Resource):
 		                          type=str,
 		                          required=True,
 		                          )
-        user_parser.add_argument('groupID',
-		                          type=int,
-		                          required=False,
-		                          )
-        user_parser.add_argument('groupPassword',
+        user_parser.add_argument('groupCode',
 		                          type=str,
 		                          required=False,
 		                          )
         data = user_parser.parse_args()
 
+        # user_id = get_jwt_identity()
+        # permission, valid_user = getUser(user_id)
 
-        #adds user to the database if passwords match and username isn't taken
-        if data['password'] != data['password_confirm']:
-            return {'message':'Passwords do not match.'},400
+        # if not valid_user:
+        #     return errorMessage("Not a valid user accessing this information!"), 401
 
-        data['username'] = data['username'].lower()
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
 
-        find_user, user = find_by_name(data['username'])
-        if find_user == True:
-            return {'message':'Username exists, try again.'},400
+            #adds user to the database if passwords match and username isn't taken
+            if data['password'] != data['password_confirm']:
+                raise UserException("Password do not match.", 401)
 
-        query = "INSERT INTO user (`username`, `password`, `permissionGroup`) VALUES (%s, %s, %s)"
-        salted_password = generate_password_hash(data['password'])
+            data['username'] = data['username'].lower()
 
-        post_to_db(query, (data['username'], salted_password,'us'))
+            find_user, user = find_by_name(data['username'])
+            if find_user == True:
+                raise UserException("Username already exists.", 401)
 
-        #logic to deal if user is requesting to join a group, and checks validation
-        if data['groupID'] != None:
-            checkGroup = check_group_db(data['groupID'],data['groupPassword'])
-            if checkGroup == True:
-                find_user, user = find_by_name(data['username'])
-                query = "INSERT INTO `group_user` (`userID`, `groupID`, `isAdmin`) VALUES (%s, %s, %s)"
-                post_to_db(query, (user[0], data['groupID'], 0))
+            query = "INSERT INTO user (`username`, `password`, `permissionGroup`) VALUES (%s, %s, %s)"
+            salted_password = generate_password_hash(data['password'])
 
+            post_to_db(query, (data['username'], salted_password,'st'), conn, cursor)
 
-        return {'message':'Successfully registered!'}, 201
+            query = "SELECT `userID` FROM `user` WHERE `username`=%s"
+            results = get_from_db(query, data['username'], conn, cursor)
+            user_id = results[0][0]
+
+            if data['groupCode']:
+                gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`=%s"
+                results = get_from_db(gc_query, data['groupCode'], conn, cursor)
+                if results:
+                    group_id = results[0][0]
+                    gu_query = "INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES (%s, %s, %s)"
+                    post_to_db(gu_query, (user_id, group_id, 'st'), conn, cursor)
+          
+            raise ReturnSuccess("Successfully registered!", 201)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except UserException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
 
 #resets password for the given UserID
 class ResetPassword(Resource):
