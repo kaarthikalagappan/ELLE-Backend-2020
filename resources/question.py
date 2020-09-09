@@ -460,9 +460,7 @@ class DeleteQuestion(Resource):
             delete_from_db(query)
             return {'message':'Successfully deleted question and answer set!'}, 201
 
-
         return {'message':'No question with that ID exist!'}, 201
-
 
 class Question(Resource):
     #adds a question to the database table
@@ -589,8 +587,8 @@ class Question(Resource):
             if DEBUG:
                 print("Adding a new question")
                 
-            if permission != 'su':
-                raise QuestionsException("Not an admin to add questions", 401)
+            if permission == 'st' and not is_ta(user_id, data['groupID']):
+                raise QuestionsException("User not authorized to add questions.", 401)
 
             if DEBUG:
                 print("Adding the question with questionID: " + str(maxID))
