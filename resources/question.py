@@ -58,7 +58,7 @@ class Answer(Resource):
 		                          type=str,
 		                          required=True,
 		                          )
-        parser.add_argument('groupID',
+        answer_parser.add_argument('groupID',
                             required = False,
                             type = str,
                             help = "groupID is required if student is TA")
@@ -91,10 +91,10 @@ class DeleteAnswer(Resource):
 		                          type=str,
 		                          required=True,
 		                          )
-        parser.add_argument('groupID',
-                            required = False,
-                            type = str,
-                            help = "groupID is required if student is TA")
+        answer_parser.add_argument('groupID',
+                                  required = False,
+                                  type = str,
+                                  help = "groupID is required if student is TA")
         data = answer_parser.parse_args()
 
         permission, user_id = validate_permissions()
@@ -136,9 +136,9 @@ class Modify(Resource):
 		                          required=False,
 		                          )
         parser.add_argument('groupID',
-                            required = False,
-                            type = str,
-                            help = "groupID is required if student is TA")
+                                  required = False,
+                                  type = str,
+                                  help = "groupID is required if student is TA")
         data = parser.parse_args()
 
         data['imageID'] = None
@@ -429,8 +429,6 @@ class SearchText(Resource):
             finalQuestionObject.append(newQuestionObject)
         return finalQuestionObject
 
-
-
 class DeleteQuestion(Resource):
     #deletes a question
     @jwt_required
@@ -440,10 +438,10 @@ class DeleteQuestion(Resource):
 		                          type=str,
 		                          required=True,
 		                          )
-        parser.add_argument('groupID',
-                            required = False,
-                            type = str,
-                            help = "groupID is required if student is TA")
+        question_parser.add_argument('groupID',
+                                  required = False,
+                                  type = str,
+                                  help = "groupID is required if student is TA")
         data = question_parser.parse_args()
 
         permission, user_id = validate_permissions()
@@ -454,8 +452,6 @@ class DeleteQuestion(Resource):
             return "User not authorized to delete questions.", 400
 
         if (find_question(int(data['questionID']))):
-            query = "DELETE FROM `answer` WHERE `questionID` ="+ str(data['questionID'])
-            delete_from_db(query)
             query = "DELETE FROM `question` WHERE `questionID`="+ str(data['questionID'])
             delete_from_db(query)
             return {'message':'Successfully deleted question and answer set!'}, 201
@@ -480,9 +476,9 @@ class Question(Resource):
                                   required=True,
                                   help="Pass in the ID of the module to which the question should be linked")
         parser.add_argument('groupID',
-                            required = False,
-                            type = str,
-                            help = "groupID is required if student is TA")
+                                  required = False,
+                                  type = str,
+                                  help = "groupID is required if student is TA")
         data = parser.parse_args()
 
         data['imageID'] = None
