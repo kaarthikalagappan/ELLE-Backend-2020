@@ -8,10 +8,8 @@ from db_utils import *
 from utils import *
 import os
 
-
 class CustomException(Exception):
     pass
-
 
 class ReturnSuccess(Exception):
     def __init__(self, msg, returnCode):
@@ -23,6 +21,7 @@ class ReturnSuccess(Exception):
         self.returnCode = returnCode
 
 class LoggedAnswer(Resource):
+    # Create a logged_answer that stores if the user got the question correct
     @jwt_required
     def post(self):
         parser = reqparse.RequestParser()
@@ -40,11 +39,9 @@ class LoggedAnswer(Resource):
                             type = str)
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
         
         try:
             conn = mysql.connect()
@@ -70,6 +67,7 @@ class LoggedAnswer(Resource):
                 cursor.close()
                 conn.close()
 
+    # Pull a user's logged_answers based on a given module
     @jwt_required
     def get(self):
         parser = reqparse.RequestParser()
@@ -81,11 +79,9 @@ class LoggedAnswer(Resource):
                             type = str)
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
         
         try:
             conn = mysql.connect()
@@ -98,9 +94,9 @@ class LoggedAnswer(Resource):
             
             #TODO: STUDENT USERS CAN ONLY PULL THEIR OWN RECORDS, ONLY ADMINS AND SUPER USERS
             # CAN REQUEST OTHER STUDENTS' OR ALL SESSIONS
-            if (not data['userID'] or data['userID'] == "") and permission == 'ad':
+            if (not data['userID'] or data['userID'] == "") and (permission == 'pf' or permission == 'su'):
                 userExp = "REGEXP '.*'"
-            elif permission == 'ad':
+            elif (permission == 'pf' or permission == 'su'):
                 userExp = " = " + str(data['userID'])
             else:
                 userExp = " = " + str(user_id)

@@ -143,35 +143,40 @@ class Term(Resource):
                             required=False,
                             help="Pass the moduleID to which this term should be added to",
                             type=str)
+        parser.add_argument('groupID',
+                            required=False,
+                            help="Pass the groupID if the user is a TA",
+                            type=str)
         data = parser.parse_args()
 
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
+        if permission == 'st' and not is_ta(user_id, data['groupID']):
+            return "User not authorized to create terms", 400
+
+        # Create imageID and audioID fields to keep track of uploads
         data['imageID'] = None
         data['audioID'] = None
         if data['type']:
             data['type'] = data['type'][:2]
 
-        maxID = -1
-
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
-
-        if 'termID' not in data or not data['termID']:
+        if not data['termID']:
             data['termID'] = None
 
-        if 'gender' not in data or not data['gender']:
+        if not data['gender']:
             data['gender'] = None
         else:
             data['gender'] = data['gender'][:1]
  
-        if 'language' not in data or not data['language']:
+        if not data['language']:
             data['language'] = None
         else:
             data['language'] = data['language'][:2].lower()
  
-        if 'tag' not in data or not data['tag']:
+        if not data['tag']:
             data['tag'] = []
 
         if DEBUG:
@@ -182,15 +187,11 @@ class Term(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            #If an image was provided to upload
+            # If an image was provided to upload
             if 'image' in request.files:
                 if DEBUG:
                     print("Found image to upload, uploading them")
                     print(request.files['image'])
-
-                #if data['imageID'] already has a value, then we have already uploaded an image
-                if data['imageID'] is not None:
-                        raise TermsException("Uploading two images, can only upload one per term", 403)
 
                 dateTime = time.strftime("%d%m%y%H%M%S")
 
@@ -228,10 +229,6 @@ class Term(Resource):
                 if DEBUG:
                     print("Found audio to upload, uploading them")
                     print(request.files['audio'])
-
-                #if data['audioID'] already has a value, then we have already uploaded an audio            
-                if data['audioID'] is not None:
-                            raise TermsException("Uploading two audio files, can only upload one per term", 403)
 
                 dateTime = time.strftime("%d%m%y%H%M%S")
 
@@ -272,9 +269,6 @@ class Term(Resource):
             if data['termID'] is not None:
                 if DEBUG:
                     print("updaing an existing term of termID: " + str(data['termID']))
-
-                if permission != 'ad':
-                    raise TermsException("Not an admin to edit terms", 401)
 
                 query = "SELECT front from term WHERE termID = %s"
                 result = get_from_db(query, str(data['termID']), conn, cursor)
@@ -381,9 +375,6 @@ class Term(Resource):
                 # Add new term   
                 if DEBUG:
                     print("Adding a new term")
-                    
-                if permission != 'ad':
-                    raise TermsException("Not an admin to add terms", 401)
 
                 query = "SELECT MAX(termID) FROM term"
                 result = get_from_db(query, None, conn, cursor)
@@ -442,27 +433,26 @@ class Term(Resource):
                             required = True,
                             type = str,
                             help = "Term id required for deletion")
+        parser.add_argument('groupID',
+                            required = False,
+                            type = str,
+                            help = "groupID is required if student is TA")
         data = parser.parse_args()
+
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
+        if permission == 'st' and not is_ta(user_id, data['groupID']):
+            return "User not authorized to delete terms", 400
 
         if not data['termID'] or data['termID'] == '':
             return errorMessage("Please pass in a valid term id"), 400
 
-        user_id = get_jwt_identity()
-
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
-            
-            query = "SELECT permissionGroup FROM user WHERE userID = %s"
-            permission = get_from_db(query, str(user_id), conn, cursor)
-
-            if not permission:
-                raise TermsException("Not a valid user", 401)
-
-            permission = permission[0][0]
-
-            if permission != 'ad':
-                raise TermsException("Not an user authorized to delete terms", 401)
             
             exists = check_if_term_exists(data['termID'])
 
@@ -497,6 +487,7 @@ class Term(Resource):
             delete_from_db(query, str(data['termID']), conn, cursor)
             raise ReturnSuccess("Term " + str(data['termID']) + " successfully deleted", 202)
         except ReturnSuccess as success:
+            #If database changes are successfully, permanently delete the media files
             if imageLocation and imageLocation[0]:
                 os.remove(str(cross_plat_path(TEMP_DELETE_FOLDER + str(imageLocation[0][0]))))
             if audioLocation and audioLocation[0]:
@@ -507,6 +498,7 @@ class Term(Resource):
             conn.rollback()
             return error.msg, error.returnCode
         except Exception as error:
+            #If an error occured while delete database records, move the media back to original location
             if imageLocation and imageLocation[0]:
                 os.rename(cross_plat_path(TEMP_DELETE_FOLDER + str(imageLocation[0][0])), cross_plat_path(IMG_UPLOAD_FOLDER + str(imageLocation[0][0])))
             if audioLocation and audioLocation[0]:
@@ -523,11 +515,10 @@ class Tags(Resource):
     @jwt_required
     #Get all the tags in the database
     def get(self):
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
         
         try:
             conn = mysql.connect()
@@ -564,12 +555,11 @@ class Tag_Term(Resource):
                             type = str,
                             help = "Name of tag required to retrieve associated terms")
         data = parser.parse_args()
-
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
         
         try:
             conn = mysql.connect()
@@ -615,11 +605,10 @@ class Specific_Term(Resource):
                             help = "ID of the term whose tags need to be retrieved is required")
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
         try:
             conn = mysql.connect()
@@ -664,11 +653,10 @@ class Tags_In_Term(Resource):
                             help = "ID of the term whose tags need to be retrieved is required")
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
         
         try:
             conn = mysql.connect()

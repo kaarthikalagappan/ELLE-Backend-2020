@@ -58,9 +58,23 @@ class Answer(Resource):
 		                          type=str,
 		                          required=True,
 		                          )
+        parser.add_argument('groupID',
+                            required = False,
+                            type = str,
+                            help = "groupID is required if student is TA")
         data = answer_parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
+        if permission == 'st' and not is_ta(user_id, data['groupID']):
+            return "User not authorized to add answers.", 400
+
+
         query = "INSERT INTO answer (`questionID`, `termID`) VALUES (%s, %s)"
         post_to_db(query, (int(data['questionID']), int(data['termID'])))
+
         return {'message':'Successfully added answer!'}, 201
 
 #REMOVE THIS METHOD AS DELETING ANSWER WILL BE HANDLED WITHIN MODIFY QUESTION IN THE FUTURE
@@ -77,9 +91,22 @@ class DeleteAnswer(Resource):
 		                          type=str,
 		                          required=True,
 		                          )
+        parser.add_argument('groupID',
+                            required = False,
+                            type = str,
+                            help = "groupID is required if student is TA")
         data = answer_parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
+        if permission == 'st' and not is_ta(user_id, data['groupID']):
+            return "User not authorized to delete answers.", 400
+        
         query = "DELETE FROM `answer` WHERE `questionID`=" + str(data['questionID']) + " AND `termID`=" + str(data['termID'])
         post_to_db(query)
+
         return{'message':'Deleted Answer'},201
 
 
@@ -108,6 +135,10 @@ class Modify(Resource):
 		                          type=str,
 		                          required=False,
 		                          )
+        parser.add_argument('groupID',
+                            required = False,
+                            type = str,
+                            help = "groupID is required if student is TA")
         data = parser.parse_args()
 
         data['imageID'] = None
@@ -115,11 +146,12 @@ class Modify(Resource):
 
         maxID = -1
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        if permission == 'st' and not is_ta(user_id, data['groupID']):
+            return "User not authorized to modify questions.", 400
 
         try:
             conn = mysql.connect()
@@ -303,6 +335,11 @@ class SearchType(Resource):
 		                          required=True,
 		                          )
         data = question_parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
         if data['type']:
             query = "SELECT DISTINCT question.* FROM `question` INNER JOIN answer on answer.questionID = question.questionID \
                     INNER JOIN term on term.termID = answer.termID and term.language = %s WHERE question.type = %s"
@@ -355,6 +392,11 @@ class SearchText(Resource):
 		                          required=True,
 		                          )
         data = question_parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
         query = "SELECT DISTINCT question.* FROM `question` INNER JOIN answer on answer.questionID = question.questionID \
                 INNER JOIN term on term.termID = answer.termID and term.language = %s WHERE question.questionText = %s"
         result = get_from_db(query, (data['language'], data['questionText']))
@@ -398,7 +440,19 @@ class DeleteQuestion(Resource):
 		                          type=str,
 		                          required=True,
 		                          )
+        parser.add_argument('groupID',
+                            required = False,
+                            type = str,
+                            help = "groupID is required if student is TA")
         data = question_parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
+        if permission == 'st' and not is_ta(user_id, data['groupID']):
+            return "User not authorized to delete questions.", 400
+
         if (find_question(int(data['questionID']))):
             query = "DELETE FROM `answer` WHERE `questionID` ="+ str(data['questionID'])
             delete_from_db(query)
@@ -427,6 +481,10 @@ class Question(Resource):
                                   type=str,
                                   required=True,
                                   help="Pass in the ID of the module to which the question should be linked")
+        parser.add_argument('groupID',
+                            required = False,
+                            type = str,
+                            help = "groupID is required if student is TA")
         data = parser.parse_args()
 
         data['imageID'] = None
@@ -434,11 +492,12 @@ class Question(Resource):
 
         maxID = -1
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        if permission == 'st' and not is_ta(user_id, data['groupID']):
+            return "User not authorized to add questions.", 400
 
         try:
             conn = mysql.connect()
@@ -530,7 +589,7 @@ class Question(Resource):
             if DEBUG:
                 print("Adding a new question")
                 
-            if permission != 'ad':
+            if permission != 'su':
                 raise QuestionsException("Not an admin to add questions", 401)
 
             if DEBUG:
@@ -541,13 +600,40 @@ class Question(Resource):
 
             query = "SELECT MAX(questionID) FROM question"
             result = get_from_db(query, None, conn, cursor)
-            maxID = check_max_id(result) - 1
+            question_id = check_max_id(result) - 1
 
             if data['moduleID']:
                 query = "INSERT INTO `module_question` (`moduleID`, `questionID`) VALUES (%s, %s)"
-                post_to_db(query, (data['moduleID'], str(maxID)), conn, cursor)
-            
-            raise ReturnSuccess({"Message" : "Successfully created a question", "questionID" : int(maxID)}, 201)
+                post_to_db(query, (data['moduleID'], question_id), conn, cursor)
+
+            # Add the existing terms to the question as answers
+            ans_list = request.form.getlist('answers')
+            ans_list = json.loads(ans_list[0])
+            for ans in ans_list:
+                query = "INSERT INTO `answer` (questionID, termID) VALUES (%s, %s)"
+                post_to_db(query, (question_id, ans), conn, cursor)
+
+            # Creating new terms that will be linked to the question based on the objects passed in
+            term_obj_list = request.form.getlist('arr_of_terms')
+            for term_obj in term_obj_list:
+                term_obj = json.loads(term_obj)
+                for term in term_obj:
+                    query = "INSERT INTO `term` (front, back, language) VALUES (%s, %s, %s)"
+                    post_to_db(query, (term['front'], term['back'], term['language']), conn, cursor)
+                    term_query = "SELECT MAX(termID) FROM `term`"
+                    result = get_from_db(term_query, None, conn, cursor)
+                    termID = check_max_id(result) - 1
+                    answer_query = "INSERT INTO `answer` (questionID, termID) VALUES (%s, %s)"
+                    post_to_db(answer_query, (question_id, termID), conn, cursor)
+
+                    for t in term['tags']:
+                        tag_query = "SELECT * FROM `tag` WHERE termID = %s AND tagName = %s"
+                        tag_result = get_from_db(tag_query, (termID, str(t).lower()), conn, cursor)
+                        if not tag_result:
+                            query = "INSERT INTO `tag` (termID, tagName) VALUES (%s, %s)"
+                            post_to_db(query, (termID, str(t).lower()), conn, cursor)
+
+            raise ReturnSuccess({"Message" : "Successfully created a question", "questionID" : int(question_id)}, 201)
     
         except QuestionsException as error:
             conn.rollback()
@@ -572,6 +658,10 @@ class Question(Resource):
 		                          required=False,
 		                          )
         data = question_parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
         if (find_question(data['questionID'])):
 
@@ -603,10 +693,6 @@ class Question(Resource):
             return newQuestionObject
         else:
             return {'message':'Question does not exist!'}, 404
-
-
-
-
 
 def find_question(questionID):
 	query = "SELECT * FROM question WHERE questionID=%s"

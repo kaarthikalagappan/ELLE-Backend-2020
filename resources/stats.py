@@ -7,15 +7,14 @@ from db import mysql
 from db_utils import *
 from utils import *
 from datetime import datetime, timedelta
+from config import GAME_PLATFORMS
 import os.path
 
-def get_platforms():
-    query = "SELECT DISTINCT platform FROM session"
-    return get_from_db(query)
 
 def get_module_headers():
     query = "SELECT DISTINCT moduleID, name FROM module"
     return get_from_db(query)
+
 
 def query_sessions(query):
     result = get_from_db(query)
@@ -34,6 +33,7 @@ def query_sessions(query):
         if session['endTime'] != None:
             sessions.append(session)
     return sessions
+
 
 def get_averages(sessions):
     if len(sessions) == 0:
@@ -55,7 +55,6 @@ def get_averages(sessions):
     stat['averageSessionLength'] = (timeTotal / 60) / len(sessions)
     return stat
         
-
 
 # Returns a list of sessions associated with the given module
 class ModuleReport(Resource):
@@ -87,11 +86,7 @@ class ModuleReport(Resource):
 class PlatformNames(Resource):
     @jwt_required
     def get(self):
-        result = get_platforms()
-        list = []
-        for row in result:
-            list.append(row[0])
-        return list
+        return GAME_PLATFORMS
         
 
 # Provides the average score and session duration for the given module
@@ -102,20 +97,18 @@ class ModuleStats(Resource):
         parser.add_argument('moduleID', required=True, type=str, help="Please supply the ID of the module you wish to look up.")
         data = parser.parse_args()
         module_id = data['moduleID']
-        platforms = get_platforms()
+        platforms = GAME_PLATFORMS
         stats = []
         for platform in platforms:
-            query = f"SELECT * FROM session WHERE moduleID = {module_id} AND platform = '{platform[0]}'"
+            query = f"SELECT * FROM session WHERE moduleID = {module_id} AND platform = '{platform}'"
             sessions = query_sessions(query)
             stat = get_averages(sessions)
             if not stat:
                 continue
-            stat['platform'] = platform[0]
+            stat['platform'] = platform
             stats.append(stat)
         return stats
         
-
-
 
 # Provides the average scores and session durations for the given game
 class PlatformStats(Resource):

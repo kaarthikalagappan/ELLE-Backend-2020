@@ -112,7 +112,8 @@ class Testing(Resource):
 class JWTTest(Resource):
     @jwt_required
     def get(self):
-        user_id = get_jwt_identity()
-        permission = get_jwt_claims()
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
         return {"user_id": user_id, "permission" : permission}

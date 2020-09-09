@@ -57,11 +57,10 @@ class Session(Resource):
         if 'sessionDate' not in data or not data['sessionDate']:
             data['sessionDate'] = time.strftime("%D")
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
         
         try:
             conn = mysql.connect()
@@ -98,10 +97,10 @@ class Session(Resource):
         
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-        if not valid_user:
-            return errorMessage("Not a valid user accessing this information!"), 401
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
         try:
             conn = mysql.connect()
@@ -113,6 +112,8 @@ class Session(Resource):
             results = get_from_db(query, None, conn, cursor)
             if results and results[0]:
                 sessionData['session'].append(convertSessionsToJSON(results[0]))
+                if permission == 'st' and sessionData['session']['userID'] != user_id:
+                    raise SessionException("Unauthorized to access this session", 400)
             else:
                 raise SessionException("No sessions found for the given ID", 400)
 
@@ -161,10 +162,10 @@ class End_Session(Resource):
                             type = str)
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
         
         try:
             conn = mysql.connect()
@@ -213,10 +214,10 @@ class SearchSessions(Resource):
                             help = "moduleID of whose session logs are needed is required")
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-        if not valid_user:
-            return errorMessage("Not a valid user accessing this information!"), 401
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
         try:
             conn = mysql.connect()
@@ -230,7 +231,8 @@ class SearchSessions(Resource):
             else:
                 data['moduleID'] = "= '" + str(data['moduleID']) + "'"
             
-            if not data['userID'] or data['userID'] == '':
+            # Students (and TAs) cannot pull another user's session data
+            if permission == 'su' or not data['userID'] or data['userID'] == '':
                 data['userID'] = "= '" + str(user_id) + "'"
             else:
                 data['userID'] = "= '" + str(data['userID']) + "'"
@@ -269,28 +271,28 @@ class SearchSessions(Resource):
 class GetAllSessions(Resource):
     @jwt_required
     def get(self):
-        parser = reqparse.RequestParser()
-        data = parser.parse_args()
-
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+        
+        if permission != 'su':
+            return "Unauthorized user", 401
 
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            # REMINDER: currently using ad, update to what super user is set to
-            if permission == 'ad':
-                query = f"SELECT session.*, module.name from `session` INNER JOIN module ON module.moduleID"
-                results = get_from_db(query, None, conn, cursor)
-                records = []
-                if results and results[0]:
-                    for session in results:
-                        records.append(convertSessionsToJSON(session))
-                if records:
-                    raise ReturnSuccess(records, 200)
-                else:
-                    raise ReturnSuccess("No sessions found for the chosen module", 210)
+            query = f"SELECT session.*, module.name from `session` INNER JOIN module ON module.moduleID"
+            results = get_from_db(query, None, conn, cursor)
+            records = []
+            if results and results[0]:
+                for session in results:
+                    records.append(convertSessionsToJSON(session))
+            if records:
+                raise ReturnSuccess(records, 200)
+            else:
+                raise ReturnSuccess("No sessions found for the chosen module", 210)
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode

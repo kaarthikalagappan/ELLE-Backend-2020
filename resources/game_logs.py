@@ -50,11 +50,10 @@ class GameLog(Resource):
                             type = str)
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user!"), 401
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
         data['platform'] = data['platform'].lower()
 
@@ -95,11 +94,10 @@ class GameLog(Resource):
                             help = "ID of module option search option")
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission, valid_user = getUser(user_id)
-
-        if not valid_user:
-            return errorMessage("Not a valid user accessing this information!"), 401
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
         try:
             conn = mysql.connect()

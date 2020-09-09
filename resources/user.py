@@ -40,36 +40,36 @@ class UserException(Exception):
 
 def find_by_name(username):
 
-	query = "SELECT * FROM user WHERE username=%s"
-	result = get_from_db(query, (username,))
+    query = "SELECT * FROM user WHERE username=%s"
+    result = get_from_db(query, (username,))
 
-	for row in result:
-		if row[1] == username:
-			return True, row
+    for row in result:
+        if row[1] == username:
+            return True, row
 
-	return False, None
+    return False, None
 
 def find_by_token(token):
 
-	query = "SELECT * FROM tokens WHERE expired=%s"
-	result = get_from_db(query, (token,))
+    query = "SELECT * FROM tokens WHERE expired=%s"
+    result = get_from_db(query, (token,))
 
-	for row in result:
-		if row[0] == token:
-			return False
+    for row in result:
+        if row[0] == token:
+            return False
 
-	return True
+    return True
 
 def check_user_db(_id):
 
-	query = "SELECT * FROM user WHERE userID=%s"
-	result = get_from_db(query, (_id,))
+    query = "SELECT * FROM user WHERE userID=%s"
+    result = get_from_db(query, (_id,))
 
-	for row in result:
-		if row[0] == _id:
-			return True
+    for row in result:
+        if row[0] == _id:
+            return True
 
-	return False
+    return False
 
 
 
@@ -116,8 +116,11 @@ class Users(Resource):
 class User(Resource):
     @jwt_required
     def get(self):
-        id = get_jwt_identity()
-        query = "SELECT * FROM user WHERE userID = "+ str(id)
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
+        query = "SELECT * FROM user WHERE userID = "+ str(user_id)
         result = get_from_db(query)
         for row in result:
             newUserObject = {}
@@ -135,7 +138,11 @@ class User(Resource):
 class UserLogout(Resource):
     @jwt_required
     def post(self):
-        user_id = get_jwt_identity();
+        permission, user_id = validate_permissions()
+
+        if not permission or not user_id:
+            return "Invalid user", 401
+
         put_in_blacklist(user_id)
         return{"message":"Successfully logged out"}, 200
 
@@ -144,17 +151,17 @@ class UserLogout(Resource):
 #logs the user in and assigns them a jwt access token
 class UserLogin(Resource):
     def post(self):
-
         user_parser = reqparse.RequestParser()
         user_parser.add_argument('username',
-		                          type=str,
-		                          required=True,
-		                          )
+                                  type=str,
+                                  required=True,
+                                  )
         user_parser.add_argument('password',
-		                          type=str,
-		                          required=True,
-		                          )
+                                  type=str,
+                                  required=True,
+                                  )
         data = user_parser.parse_args()
+
         data['username'] = data['username'].lower()
         find_user, user = find_by_name(data['username'])
         if find_user:
@@ -166,9 +173,9 @@ class UserLogin(Resource):
                 query = "UPDATE `user` SET `lastToken`=%s WHERE `userID` =%s"
                 post_to_db(query, (access_token , user[0]))
                 return {
-					'access_token': access_token,
-					'id':user[0]
-				}, 200
+                    'access_token': access_token,
+                    'id':user[0]
+                }, 200
             else:
                 return{'message':'Incorrect Password. Try again'}, 401
         return{'message':'User Not Found!'}, 401
@@ -177,34 +184,26 @@ class UserLogin(Resource):
 
 #register the user to the database
 class UserRegister(Resource):
-
     def post(self):
-
         user_parser = reqparse.RequestParser()
         user_parser.add_argument('username',
-		                          type=str,
-		                          required=True,
-		                          )
+                                  type=str,
+                                  required=True,
+                                  )
         user_parser.add_argument('password',
-		                          type=str,
-		                          required=True,
-		                          )
+                                  type=str,
+                                  required=True,
+                                  )
         user_parser.add_argument('password_confirm',
-		                          type=str,
-		                          required=True,
-		                          )
+                                  type=str,
+                                  required=True,
+                                  )
         user_parser.add_argument('groupCode',
-		                          type=str,
-		                          required=False,
-		                          )
+                                  type=str,
+                                  required=False,
+                                  )
         data = user_parser.parse_args()
-
-        # user_id = get_jwt_identity()
-        # permission, valid_user = getUser(user_id)
-
-        # if not valid_user:
-        #     return errorMessage("Not a valid user accessing this information!"), 401
-
+        
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
@@ -253,48 +252,50 @@ class UserRegister(Resource):
 
 #resets password for the given UserID
 class ResetPassword(Resource):
+    def post(self):
+        user_parser = reqparse.RequestParser()
+        user_parser.add_argument('userID',
+                                  type=int,
+                                  required=True,
+                                  )
+        user_parser.add_argument('pw',
+                                  type=str,
+                                  required=True,
+                                  )
+        user_parser.add_argument('confirm',
+                                  type=str,
+                                  required=True,
+                                  )
+        data = user_parser.parse_args()
 
-	def post(self):
-		user_parser = reqparse.RequestParser()
-		user_parser.add_argument('userID',
-		                          type=int,
-		                          required=True,
-		                          )
-		user_parser.add_argument('pw',
-		                          type=str,
-		                          required=True,
-		                          )
-		user_parser.add_argument('confirm',
-		                          type=str,
-		                          required=True,
-		                          )
-		data = user_parser.parse_args()
+        if data['pw'] != data['confirm']:
+            return {'message':'Passwords do not match!'},400
 
-		if data['pw'] != data['confirm']:
-			return{'message':'Passwords do not match!'},400
+        pw = generate_password_hash(data['pw'])
 
-		pw = generate_password_hash(data['pw'])
+        query = "UPDATE user SET password=%s WHERE userID=" + str(data['userID'])
 
-		query = "UPDATE user SET password=%s WHERE userID=" + str(data['userID'])
+        post_to_db(query, (pw,))
 
-		post_to_db(query, (pw,))
-
-		return {'message':'Successfully reset the password'}, 201
+        return {'message':'Successfully reset the password'}, 201
 
 #Checks to see whether given token is active or not
 class CheckIfActive(Resource):
-
     @jwt_required
     def post(self):
         user_parser = reqparse.RequestParser()
         user_parser.add_argument('token',
-		                          type=str,
-		                          required=True,
-		                          )
+                                  type=str,
+                                  required=True,
+                                  )
         data = user_parser.parse_args()
-        id = get_jwt_identity()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
         if find_by_token(data['token']):
-            return id
+            return user_id
         return -1, 400
 
 
@@ -303,14 +304,15 @@ class UsersHighscores(Resource):
     def post(self):
         user_parser = reqparse.RequestParser()
         user_parser.add_argument('moduleID',
-		                          type=str,
-		                          required=True,
-		                          )
+                                  type=str,
+                                  required=True,
+                                  )
         user_parser.add_argument('platform',
-		                          type=str,
-		                          required=True,
-		                          )
+                                  type=str,
+                                  required=True,
+                                  )
         data = user_parser.parse_args()
+
         query = "SELECT `userID`,`playerScore` FROM `session` WHERE `moduleID`=%s AND`platform`=%s ORDER BY LENGTH(`playerScore`),`playerScore`"
         result = get_from_db(query, (data['moduleID'], data['platform']))
         user = []
@@ -324,3 +326,53 @@ class UsersHighscores(Resource):
                 userscores['usernames'] = name[0][0]
             user.append(userscores)
         return user
+
+class UserLevels(Resource):
+    @jwt_required
+    def get(self):
+        user_parser = reqparse.RequestParser()
+        data = user_parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+        
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            query = "SELECT `group`.groupID, `group`.groupName, `group_user`.accessLevel \
+                     FROM `group_user` \
+                     INNER JOIN `group` \
+                     ON `group`.groupId = `group_user`.groupID \
+                     WHERE `group_user`.userID=%s" 
+            results = get_from_db(query, user_id, conn, cursor)
+
+            userLevels = []
+            for userLevel in results:
+                userLevels.append(convertUserLevelsToJSON(userLevel))
+          
+            raise ReturnSuccess(userLevels, 201)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except UserException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
+def convertUserLevelsToJSON(userLevel):
+    if len(userLevel) < 3:
+        return errorMessage("passed wrong amount of values to convertUserLevelsToJSON")
+    result = {
+        'groupID' : userLevel[0],
+        'groupName' : userLevel[1],
+        'accessLevel' : userLevel[2],
+    }
+    return result

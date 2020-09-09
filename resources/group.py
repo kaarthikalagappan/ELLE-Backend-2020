@@ -41,19 +41,26 @@ class Group(Resource):
                             type = str)
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission = get_jwt_claims()
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
 
+            if permission != 'pf':
+                return GroupException("User cannot create classes.", 400)
+
+            # Checks if the groupName already exists
             dupe_query = "SELECT `groupID` FROM `group` WHERE `groupName`=%s"
             dupe_results = get_from_db(dupe_query, data['groupName'], conn, cursor)
 
             if dupe_results:
                 raise GroupException("groupName already exists.", 400)
             else:
+                # Randomly generate 6-long string of numbers and letters
+                # String must be unique for each class
                 group_code = groupCode_generator()
                 gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`=%s"
                 gc_results = get_from_db(gc_query, group_code, conn, cursor)
@@ -68,10 +75,11 @@ class Group(Resource):
                 g_results = get_from_db(g_query, data['groupName'], conn, cursor)
                 group_id = g_results[0][0]
 
+                # Users who creates a class have their accesLevel default to 'pf'
                 gu_query = "INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES (%s, %s, %s)"
                 post_to_db(gu_query, (user_id, group_id, 'pf'), conn, cursor)
+
                 raise ReturnSuccess("Sucecssfully created the class.", 200)
-        
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -83,6 +91,114 @@ class Group(Resource):
                 cursor.close()
                 conn.close()
 
+    # Edit a group
+    @jwt_required
+    def put(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('groupID',
+                            required = True,
+                            type = int)
+        parser.add_argument('groupName',
+                            required = False,
+                            type = str)
+        parser.add_argument('groupCode',
+                            required = False,
+                            type = str)
+        data = parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
+        if 'groupName' not in data or not data['groupName']:
+            data['groupName'] = None
+
+        if 'groupCode' not in data or not data['groupCode']:
+            data['groupCode'] = None
+
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            # Only professors and superadmins can edit groups
+            if permission == 'st':
+                raise GroupException("Invalid permissions.", 400)
+        
+            # Checking groupName and make sure it is unique
+            if data['groupName'] is not None:
+                gn_query = "SELECT `groupID` FROM `group` WHERE `groupName`=%s"
+                gn_results = get_from_db(gn_query, data['groupName'], conn, cursor)
+            
+                if gn_results:
+                    raise GroupException("groupName already in use.", 400)
+
+            # Checking groupCode and make sure it is unique
+            if data['groupCode'] is not None:
+                gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`=%s"
+                gc_results = get_from_db(gc_query, data['groupCode'], conn, cursor)
+            
+                if gc_results:
+                    raise GroupException("groupCode already in use.", 400)
+        
+            if data['groupCode'] is not None and data['groupName'] is None:
+                query ="UPDATE `group` SET `groupCode`=%s WHERE `groupID`=%s"
+                results = post_to_db(query, (data['groupCode'], data['groupID']), conn, cursor)
+            elif data['groupCode'] is None and data['groupName'] is not None:
+                query ="UPDATE `group` SET `groupName`=%s WHERE `groupID`=%s"
+                results = post_to_db(query, (data['groupName'], data['groupID']), conn, cursor)
+            elif data['groupCode'] is not None and data['groupName'] is None:
+                query ="UPDATE `group` SET `groupName`=%s, `groupCode`=%s WHERE `groupID`=%s"
+                results = post_to_db(query, (data['groupName'], data['groupCode'], data['groupID']), conn, cursor)
+            else:
+                raise ReturnSuccess("No values passed in, nothing changed.", 200)
+
+            raise ReturnSuccess("Successfully updated group.", 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
+    # Delete a group
+    @jwt_required
+    def delete(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('groupID',
+                            required = True,
+                            type = int)
+        data = parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            # Only professors and superadmins can delete groups
+            if permission == 'st':
+                raise GroupException("Invalid permissions.", 400)
+
+            query = "DELETE FROM `group` WHERE `groupID` = %s"
+            delete_from_db(query, data['groupID'], conn, cursor)
+        
+            raise ReturnSuccess("Successfully deleted group.", 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
 
 class GroupRegister(Resource):  
     # Register for a group
@@ -94,16 +210,16 @@ class GroupRegister(Resource):
                             type = str)
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission = get_jwt_claims()
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
-        if permission == 'su':
-            return errorMessage("Superadmins cannot register for classes."), 402
-
-        # REMINDER: check if superadmins can register for groups
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
+
+            if permission == 'su':
+                return GroupException("Superadmins cannot register for classes."), 400
 
             query = "SELECT `groupID` FROM `group` WHERE `groupCode` = %s"
             results = get_from_db(query, data['groupCode'], conn, cursor)
@@ -112,7 +228,7 @@ class GroupRegister(Resource):
             if results:
                 group_id = results[0][0]    
 
-                # check if the user has already registered for the gruop
+                # Check if the user has already registered for the group
                 # otherwise continue with registering the user for the group
                 dupe_query = "SELECT `userID` FROM `group_user` WHERE `groupID`=%s AND `userID`=%s"
                 dupe_results = get_from_db(dupe_query, (group_id, user_id), conn, cursor)
@@ -144,13 +260,15 @@ class SearchUserGroups(Resource):
         parser = reqparse.RequestParser()
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission = get_jwt_claims()
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
 
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
 
+            # Get the group's information and append the user's accessLevel in the group
             query = "SELECT `group`.*, `group_user`.accessLevel \
                      FROM `group` \
                      INNER JOIN `group_user` \
@@ -158,10 +276,26 @@ class SearchUserGroups(Resource):
                      WHERE `group_user`.userID=%s" 
             results = get_from_db(query, user_id, conn, cursor)
             
+            # Get all users in the group
+            get_group_users_query = "SELECT `user`.userID, `user`.username, `group_user`.accessLevel \
+                                    FROM `group_user` \
+                                    INNER JOIN `user` \
+                                    ON `user`.userID = `group_user`.userID \
+                                    WHERE `group_user`.groupID=%s" 
+
             groups = []
             if results and results[0]:
                 for group in results:
-                    groups.append(convertGroupsToJSON(group))
+                    groupObj = convertGroupsToJSON(group)
+
+                    if permission == 'pf' or permission == 'su':
+                        group_users = []
+                        group_users_from_db = get_from_db(get_group_users_query, groupObj['groupID'], conn, cursor)
+                        for indv_group_user in group_users_from_db:
+                            group_users.append(convertUsersToJSON(indv_group_user))
+                        groupObj['group_users'] = group_users
+
+                    groups.append(groupObj)
             
             raise ReturnSuccess(groups, 200)
         except ReturnSuccess as success:
@@ -176,6 +310,7 @@ class SearchUserGroups(Resource):
                 conn.close()
 
 class UsersInGroup(Resource):
+    # Get's all the users in a specific group
     @jwt_required
     def get(self):
         parser = reqparse.RequestParser()
@@ -184,14 +319,15 @@ class UsersInGroup(Resource):
                             type = int)
         data = parser.parse_args()
 
-        user_id = get_jwt_identity()
-        permission = get_jwt_claims()
-
-        # should only superadmins/professors be able to search for users in a group?
+        permission, user_id = validate_permissions()
 
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
+
+            # Only superadmins/professors can search for users in a group
+            if permission == 'st':
+                raise GroupException("User cannot search for users in a group.", 400)
 
             query = "SELECT `user`.userID, `user`.username, `group_user`.accessLevel \
                      FROM `group_user` \
