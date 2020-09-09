@@ -6,7 +6,7 @@ from flaskext.mysql import MySQL
 import config
 from flask_cors import CORS
 from resources.testing import Testing, JWTTest
-from resources.user import UserRegister, Users, UserLogin, UserLogout, User, ResetPassword, CheckIfActive, UsersHighscores
+from resources.user import UserRegister, Users, UserLogin, UserLogout, User, ResetPassword, CheckIfActive, UsersHighscores, UserLevels
 from resources.terms import Term, Tags, Tag_Term, Tags_In_Term, Specific_Term
 from resources.game_logs import GameLog
 from resources.logged_answer import LoggedAnswer
@@ -127,6 +127,7 @@ api.add_resource(Group, '/group')
 api.add_resource(GroupRegister, '/groupregister')
 api.add_resource(SearchUserGroups, '/searchusergroups')
 api.add_resource(UsersInGroup, '/usersingroup')
+api.add_resource(UserLevels, '/userlevels')
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port='3000', debug=True)

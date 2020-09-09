@@ -27,3 +27,6 @@ AUD_RETRIEVE_FOLDER = '/Audios/'
 PERMISSION_GROUPS = ['su', 'pf', 'st'] #Permission groups of individual users
 ACCESS_LEVELS = ['pf', 'st', 'ta'] #Permission groups of users in a group context
 PERMISSION_LEVELS = list(set(ACCESS_LEVELS+PERMISSION_GROUPS)) #All available permission levels
+
+# List of game platforms
+GAME_PLATFORMS = ['vr', 'mb', 'pc']
