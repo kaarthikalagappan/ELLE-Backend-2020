@@ -12,6 +12,7 @@ from flaskext.mysql import MySQL
 from db import mysql
 from db_utils import *
 from utils import *
+from random_username.generate import generate_username
 import json
 import datetime
 
@@ -98,6 +99,10 @@ def check_group_db(id, password):
 class Users(Resource):
     @jwt_required
     def get(self):
+        permission, user_id = validate_permissions()
+        if not permission or not user_id or permission != 'su':
+            return "Invalid user", 401
+
         query = "SELECT * FROM user"
         result = get_from_db(query)
 
@@ -108,7 +113,18 @@ class Users(Resource):
             new_item['username'] = row[1]
             new_item['permissionGroup'] = row[4]
             final_list_users.append(new_item)
-
+        
+        get_group_query = """SELECT `group`.* FROM `group` JOIN `group_user` 
+                                ON `group_user`.`groupID`=`group`.`groupID` 
+                                WHERE `group_user`.`userID`= %s"""
+        for user in final_list_users:
+            if user['permissionGroup'] == 'pf':
+                groups = get_from_db(get_group_query, user['userID'])
+                groups_list = []
+                if groups and groups[0]:
+                    for indv_groupID in groups:
+                        groups_list.append({'groupID' : indv_groupID[0], 'groupName' : indv_groupID[1], 'groupCode' : indv_groupID[2]})
+                user['groups'] = groups_list
         return final_list_users
 
 
@@ -353,6 +369,43 @@ class UserLevels(Resource):
                 userLevels.append(convertUserLevelsToJSON(userLevel))
           
             raise ReturnSuccess(userLevels, 201)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except UserException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
+class GenerateUsername(Resource):
+    def get(self):
+        return {"username" : generate_username(1)[0]}
+
+class GetUsernames(Resource):
+    @jwt_required
+    def get(self):
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+        
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            query = "SELECT `username` FROM `user`" 
+            results = get_from_db(query, None, conn, cursor)
+
+            usernames = []
+            for username in results:
+                usernames.append(username[0])
+          
+            raise ReturnSuccess(usernames, 201)
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode

@@ -1,10 +1,11 @@
 # ELLE Backend 2020
 Backend API files for ELLE 2020 (3rd) version. <br />
-To add database credentials, create the config.py file, add the following data to the config files, and replace the variable values to the correct information:
-```
-MYSQL_DATABASE_USER = DATABASE_USERNAME
-MYSQL_DATABASE_PASSWORD = DATABASE_USER_PASSWORD
-MYSQL_DATABASE_DB = DATABASE_NAME
-MYSQL_DATABASE_HOST = HOST_NAME #usually localhost
-SECRET_KEY = RANDOM_SECRET_KEY #some random string to act as secret key for Python Flask
-```
+
+## Setup
+The following steps can be used to setup the backend on your local machine or a new server:
+* Clone this repo
+* Install all the dependencies listed in the requirements.txt file by running the command `pip install -r requirements.txt` (run in virtual environment if required)
+* Setup a SQL server (this was originally developed on a MySQL database) and use the schema.sql file to create the required tables and fields
+* Change the database configuration values in the config.py file to reflect the newly create database information
+* Start the Flask framework by running `python3 __init__.py`
+    * This starts Flask on debug mode and binded to port 3000

@@ -1,4 +1,4 @@
-from flask import request
+from flask import request, Response
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
@@ -37,6 +37,9 @@ class LoggedAnswer(Resource):
         parser.add_argument('correct',
                             required = True,
                             type = str)
+        parser.add_argument('mode',
+                            required = False,
+                            type = str)
         data = parser.parse_args()
 
         permission, user_id = validate_permissions()
@@ -52,9 +55,14 @@ class LoggedAnswer(Resource):
             elif data['correct'].lower() == 'true':
                 data['correct'] = '1'
 
-            query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`) \
-                VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']})"
-            post_to_db(query, None, conn, cursor)
+            if data['mode']:
+                query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`, `mode`) \
+                    VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']},{data['mode']})"
+                post_to_db(query, None, conn, cursor)
+            else:
+                query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`) \
+                    VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']})"
+                post_to_db(query, None, conn, cursor)
             raise ReturnSuccess("Successfully created a logged_answer record", 205)
         except ReturnSuccess as success:
             conn.commit()
@@ -117,7 +125,8 @@ class LoggedAnswer(Resource):
                         'questionID' : result[1],
                         'termID' : result[2],
                         'sessionID' : result[3],
-                        'correct' : result[4]
+                        'correct' : result[4],
+                        'mode' : result[5]
                     }
                     loggedAnswers.append(la_record)
 
@@ -135,3 +144,27 @@ class LoggedAnswer(Resource):
             if(conn.open):
                 cursor.close()
                 conn.close()
+
+class GetLoggedAnswerCSV(Resource):
+    # @jwt_required
+    def get(self):
+        # permission, user_id = validate_permissions()
+        # if not permission or not user_id or permission != 'su':
+        #     return "Invalid user", 401
+        
+        csv = 'Log ID, User ID, Username, Module ID, Module Name, Question ID, Term ID, Session ID, Correct, Mode\n'
+        query = """
+                SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name FROM logged_answer 
+                INNER JOIN session
+                INNER JOIN user ON user.userID = session.userID
+                INNER JOIN module on module.moduleID = session.moduleID
+                """
+        results = get_from_db(query)
+        if results and results[0]:
+            for record in results:
+                csv = csv + f"""{record[0]}, {record[6]}, {record[7]}, {record[8]}, {record[9]}, {record[1]}, {record[2]}, {record[3]}, {record[4]}, {record[5]}\n"""
+        return Response(
+            csv,
+            mimetype="text/csv",
+            headers={"Content-disposition":
+            "attachment; filename=Logged_Answers.csv"})

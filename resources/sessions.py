@@ -1,4 +1,4 @@
-from flask import request
+from flask import request, Response
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
@@ -52,6 +52,9 @@ class Session(Resource):
                             required = True,
                             help = "Need to specify what platform this session was played on (pc, mob, or vr)",
                             type = str)
+        parser.add_argument('mode',
+                            required = False,
+                            type = str)
         data = parser.parse_args()
 
         if 'sessionDate' not in data or not data['sessionDate']:
@@ -70,10 +73,16 @@ class Session(Resource):
             result = get_from_db(query, None, conn, cursor)
             sessionID = check_max_id(result)
 
-            query = f"INSERT INTO `session` (`sessionID`, `userID`, `moduleID`, `sessionDate`, `startTime`, `platform`) \
-                VALUES ({sessionID}, {user_id},{data['moduleID']},'{data['sessionDate']}','{data['startTime']}', \
-                '{data['platform'][:3]}')"
-            post_to_db(query, None, conn, cursor)
+            if data['mode']:
+                query = f"INSERT INTO `session` (`sessionID`, `userID`, `moduleID`, `sessionDate`, `startTime`, `mode`, `platform`) \
+                    VALUES ({sessionID}, {user_id},{data['moduleID']},'{data['sessionDate']}','{data['startTime']}','{data['mode']}', \
+                    '{data['platform'][:3]}')"
+                post_to_db(query, None, conn, cursor)
+            else:
+                query = f"INSERT INTO `session` (`sessionID`, `userID`, `moduleID`, `sessionDate`, `startTime`, `platform`) \
+                    VALUES ({sessionID}, {user_id},{data['moduleID']},'{data['sessionDate']}','{data['startTime']}', \
+                    '{data['platform'][:3]}')"
+                post_to_db(query, None, conn, cursor)
             raise ReturnSuccess({'sessionID' : sessionID}, 201)
         except ReturnSuccess as success:
             conn.commit()
@@ -126,7 +135,8 @@ class Session(Resource):
                         'questionID' : log[1],
                         'termID' : log[2],
                         'sessionID' : log[3],
-                        'correct' : log[4]
+                        'correct' : log[4],
+                        'mode' : log[5]
                     }
                     sessionData['logged_answers'].append(record)
             raise ReturnSuccess(sessionData, 200)
@@ -283,7 +293,7 @@ class GetAllSessions(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            query = f"SELECT session.*, module.name from `session` INNER JOIN module ON module.moduleID"
+            query = f"SELECT session.*, module.name from `session` INNER JOIN module ON module.moduleID = session.moduleID"
             results = get_from_db(query, None, conn, cursor)
             records = []
             if results and results[0]:
@@ -305,8 +315,33 @@ class GetAllSessions(Resource):
                 conn.close()
 
 
+class GetSessionCSV(Resource):
+    # @jwt_required
+    def get(self):
+        # permission, user_id = validate_permissions()
+        # if not permission or not user_id or permission != 'su':
+        #     return "Invalid user", 401
+        
+        csv = 'Session ID, User ID, User Name, Module ID, Module Name, Session Date, Player Score, Start Time, End Time, Platform, Mode\n'
+        query = """
+                SELECT session.*, user.username, module.name FROM session 
+                INNER JOIN user ON user.userID = session.userID
+                INNER JOIN module on module.moduleID = session.moduleID
+                """
+        results = get_from_db(query)
+        if results and results[0]:
+            for record in results:
+                platform = "Mobile" if record[7] == 'mb' else "PC" if record[7] == 'pc' else "Virtual Reality"
+                csv = csv + f"""{record[0]}, {record[1]}, {record[9]}, {record[2]}, {record[10]}, {record[3]}, {record[4]}, {record[5]}, {record[6]}, {platform}, {record[8]}\n"""
+        return Response(
+            csv,
+            mimetype="text/csv",
+            headers={"Content-disposition":
+            "attachment; filename=Sessions.csv"})
+
+
 def convertSessionsToJSON(session):
-    if len(session) < 9:
+    if len(session) < 10:
         return errorMessage("passed wrong amount of values to convertSessionsToJSON, it needs all elements in session table")
     result = {
         'sessionID' : session[0],
@@ -317,6 +352,7 @@ def convertSessionsToJSON(session):
         'startTime' : session[5],
         'endTime' : session[6],
         'platform' : session[7],
-        'moduleName' : session[8]
+        'mode' : session[8],
+        'moduleName' : session[9]
     }
     return result

@@ -1,4 +1,4 @@
-from flask import request
+from flask import request, Response
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import (
     create_access_token,
@@ -117,3 +117,28 @@ class JWTTest(Resource):
             return "Invalid user", 401
 
         return {"user_id": user_id, "permission" : permission}
+
+
+class GetLoggedAnswersCSV(Resource):
+    @jwt_required
+    def get(self):
+        permission, user_id = validate_permissions()
+        if not permission or not user_id or permission != 'su':
+            return "Invalid user", 401
+        
+        csv = 'Session ID, User ID, User Name, Module ID, Module Name, Session Date, Player Score, Start Time, End Time, Platform, Mode\n'
+        query = """
+                SELECT session.*, user.username, module.name FROM session 
+                INNER JOIN user ON user.userID = session.userID
+                INNER JOIN module on module.moduleID = session.moduleID
+                """
+        results = get_from_db(query)
+        if results and results[0]:
+            for record in results:
+                platform = "Mobile" if record[7] == 'mb' else "PC" if record[7] == 'pc' else "Virtual Reality"
+                csv = csv + f"""{record[0]}, {record[1]}, {record[9]}, {record[2]}, {record[10]}, {record[3]}, {record[4]}, {record[5]}, {record[6]}, {platform}, {record[8]}\n"""
+        return Response(
+            csv,
+            mimetype="text/csv",
+            headers={"Content-disposition":
+            "attachment; filename=Sessions.csv"})

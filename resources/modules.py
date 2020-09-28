@@ -67,20 +67,20 @@ def get_audio_location(audio_id):
         return ''
 
 # Attaches or detaches a question from the module, returning false if the question was detached
-def attach_question(module_id, question_id):
+def attach_question(module_id, question_id, conn, cursor):
     query = f"SELECT * FROM module_question WHERE moduleID = {module_id} AND questionID = {question_id}"
-    result = get_from_db(query)
+    result = get_from_db(query, None, conn, cursor)
     # If an empty list is returned, post new link
     if not result or not result[0]:
         query = f'''INSERT INTO module_question (moduleID, questionID)
                 VALUES ({module_id}, {question_id})'''
-        post_to_db(query)
+        post_to_db(query, None, conn, cursor)
         return True
     else:
         # Delete link if it exists
         query = f'''DELETE FROM module_question
                 WHERE moduleID = {module_id} AND questionID = {question_id}'''
-        post_to_db(query)
+        post_to_db(query, None, conn, cursor)
         return False
 
 
@@ -103,8 +103,8 @@ class Modules(Resource):
 
         modules = []
         for row in result:
-            modules.append(convertToJSON(row)) 
-        
+            modules.append(convertToJSON(row))
+
         # Return module information
         return modules
 
@@ -160,8 +160,71 @@ class SearchModules(Resource):
             modules.append(convertToJSON(row)) 
         
         # Return module information
-        return modules
+        return modules, 200
         
+
+class RetrieveUserModules(Resource):
+    #Get all the modules associated with the user's groups,p the modules they created,
+    #and whether they have permission to delete that module or not
+    #Design choice: TAs can only delete modules they created, Professors can delete modules
+    #they created or their TAs created, and superadmins can delete any module
+    @jwt_required
+    def get(self):
+        # Get the user's ID and check permissions
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+        
+        group_id = get_group_id()
+
+        #if a regular student user, return modules associated with their groups (similar to /modules)
+        if permission == 'st' and not is_ta(user_id, group_id):
+            query = f"""
+                SELECT `module`.*, `group_module`.`groupID` FROM `module` 
+                INNER JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
+                INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
+                WHERE `group_user`.`userID`={user_id}
+                """
+            result = get_from_db(query)
+
+            modules = []
+            for row in result:
+                modules.append(convertToJSON(row))
+
+            # Return module information
+            return modules
+
+        if permission == 'su':
+            query = f"""
+                    SELECT DISTINCT `module`.*, `group_module`.`groupID` FROM `module` 
+                    LEFT JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
+                    LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID`
+                    """
+        else:
+            query = f"""
+                    SELECT DISTINCT `module`.*, `group_module`.`groupID` FROM `module` 
+                    LEFT JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
+                    LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
+                    WHERE `group_user`.`userID`={user_id} OR `module`.`userID`={user_id}
+                    """
+        result = get_from_db(query)
+
+        modules = []
+        for row in result:
+            modules.append(convertToJSON(row))
+
+        TA_list = []
+        if permission == 'pf':
+            TA_list = GetCurrentTAList(user_id)
+
+        if is_ta(user_id, group_id):
+            for module in modules:
+                module['owned'] = True if module['userID'] == user_id else False
+        else:
+            for module in modules:
+                module['owned'] = True if module['userID'] == user_id or module['userID'] in TA_list or permission == 'su' else False
+
+        return modules, 200
 
 
 class RetrieveAllModules(Resource):
@@ -179,16 +242,16 @@ class RetrieveAllModules(Resource):
             return "Invalid permission level", 401
 
         # Query to retrieve all modules
-        query = f"SELECT * FROM module;"
+        query = f"SELECT `module`.*, `user`.userName FROM `module` INNER JOIN `user` ON `user`.userID = `module`.userID"
         result = get_from_db(query)
         
         # Attaching variable names to rows
         modules = []
         for row in result:
-            modules.append(convertToJSON(row)) 
+            modules.append(convertModuleToJSON(row)) 
         # Return module information
         return modules
-
+        
 
 # For acquiring the associated questions and answers with a module
 class ModuleQuestions(Resource):
@@ -309,65 +372,103 @@ class Module(Resource):
             complexity = data['complexity']
         else:
             complexity = 2
-        # Posting to database
-        query = f"""
-                INSERT INTO module (name, language, complexity)
-                VALUES ('{name}', '{language}', {complexity});
-                """
-        post_to_db(query)
 
-        if group_id:
-            # Linking the newly created module to the group associated with the groupID
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+            # Posting to database
+            query = f"""
+                    INSERT INTO module (name, language, complexity, userID)
+                    VALUES ('{name}', '{language}', {complexity}, {user_id});
+                    """
+            post_to_db(query)
+
             query = "SELECT MAX(moduleID) from module"
             moduleID = get_from_db(query) #ADD A CHECK TO SEE IF IT RETURNED SUCCESSFULLY
-            
-            query = f"""INSERT INTO `group_module` (`moduleID`, `groupID`) 
-                    VALUES ('{moduleID[0][0]}', '{group_id}')"""
-            post_to_db(query)
-        elif permission == 'su' and not group_id:
-            # Linking the newly created module to the group associated with superadmins only
-            query = "SELECT MAX(moduleID) from module"
-            moduleID = get_from_db(query) #ADD A CHECK TO SEE IF IT RETURNED SUCCESSFULLY
-            
-            # Hacky solution where the 19 is the groupID only meant for admins
-            query = f"""INSERT INTO `group_module` (`moduleID`, `groupID`) 
-                    VALUES ('{moduleID[0][0]}', '{19}')"""
-            post_to_db(query)
-        
-        return {'message' : 'Successfully added module and linked it to the group!'}
+
+            if not moduleID or not moduleID[0]:
+                raise CustomException("Error in creating a module", 500)
+
+            if group_id:
+                # Linking the newly created module to the group associated with the groupID            
+                query = f"""INSERT INTO `group_module` (`moduleID`, `groupID`) 
+                        VALUES ('{moduleID[0][0]}', '{group_id}')"""
+                post_to_db(query)
+
+            raise ReturnSuccess({"moduleID" : moduleID[0][0]}, 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
 
     @jwt_required
     def put(self):
-        # groupID doesn't need to be passed if professor or superadmin is updating a module
-        group_id = get_group_id()
-
-        permission, user_id = validate_permissions()
-        if not permission or not user_id:
-            return "Invalid user", 401
-        
-        if permission == 'st' and not is_ta(user_id, group_id):
-            return "User not authorized to do this", 401
-        
         # Parsing JSON
+        # groupID doesn't need to be passed if professor or superadmin is updating a module
         parser = reqparse.RequestParser()
         parser.add_argument('moduleID', type=int, required=True)
         parser.add_argument('name', type=str, required=True)
         parser.add_argument('language', type=str, required=True)
         parser.add_argument('complexity', type=int, required=True)
+        parser.add_argument('groupID', type=int, required=False)
         data = parser.parse_args()
-        module_id = data['moduleID']
-        name = data['name']
-        language = data['language']
-        complexity = data['complexity']
-        # Updating table
-        query = f"""
-                UPDATE module
-                SET name = '{name}', language = '{language}', complexity = '{complexity}'
-                WHERE moduleID = {module_id};
-                """
-        post_to_db(query)
-        return {'message' : 'Successfully updated module!'}
-        
+
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            permission, user_id = validate_permissions()
+            if not permission or not user_id:
+                return "Invalid user", 401
+            
+            if permission == 'st' and not is_ta(user_id, group_id):
+                return "User not authorized to do this", 401
+
+            module_id = data['moduleID']
+            name = data['name']
+            language = data['language']
+            complexity = data['complexity']
+            
+            # Updating table
+            query = f"""
+                    UPDATE module
+                    SET name = '{name}', language = '{language}', complexity = '{complexity}'
+                    WHERE moduleID = {module_id};
+                    """
+            post_to_db(query)
+
+            query = "SELECT `*` FROM `module` WHERE `moduleID`=%s"
+            results = get_from_db(query, data['moduleID'])
+            if not results or not results[0]:
+                raise CustomException("Non existant module", 400)
+
+            print(results)
+            moduleObj = convertToJSON(results[0])
+
+            raise ReturnSuccess(moduleObj, 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
 
     @jwt_required
     # Deleting an existing module, requires moduleID
@@ -378,24 +479,50 @@ class Module(Resource):
         if not permission or not user_id:
             return "Invalid user", 401
 
+        TA_list = []
+        if permission == 'pf':
+            TA_list = GetCurrentTAList(user_id)
+
         if permission == 'st' and not is_ta(user_id, group_id):
-            return "User not authorized to do this", 401
+            return {'Error' : 'User not authorized to do this'}, 401
         
         module_id = get_module_id()
         if not module_id:
-            return {'message' : 'Please provide the id of a module.'}
+            return {'Error' : 'Please provide the id of a module.'}, 400
+        
+        query = f"SELECT module.userID FROM module WHERE module.moduleID = {module_id}"
+        module_user_id = get_from_db(query)
+        if not module_user_id or not module_user_id[0]:
+            return {'Error' : 'Invalid module ID'}, 400
+        
+        module_user_id = module_user_id[0][0]
 
-        # # Determining if user is present in module's group
-        # query = f"SELECT groupID FROM module WHERE moduleID = {module_id};"
-        # result = get_from_db(query)
-        # if not result:
-        # 	return {'message' : 'This module id is invalid.'}
-        # # Failing if user is not in module's group
+        if (permission == 'pf' and module_user_id not in TA_list and module_user_id != user_id) or \
+           (permission == 'ta' and module_user_id != user_id):
+           return {'Error' : 'User not authorized to do this'}, 401
 
-        # Deleting module
-        query = f"DELETE FROM module WHERE moduleID = {module_id};"
-        post_to_db(query)
-        return {'message' : 'Successfully deleted module!'}
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            # Deleting module
+            query = f"DELETE FROM module WHERE moduleID = {module_id};"
+            post_to_db(query)
+
+            raise ReturnSuccess('Successfully deleted module!', 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
 
 
 #  For attaching and detaching questions from modules
@@ -418,13 +545,30 @@ class AttachQuestion(Resource):
         data = parser.parse_args()
         module_id = data['moduleID']
         question_id = data['questionID']
-        # Attaching or detaching if already attached
-        attached = attach_question(module_id, question_id)
-        # Response
-        if attached:
-            return {'message' : 'Question has been linked to module.'}, 201
-        else:
-            return {'message' : 'Question has been unlinked from module.'}, 200
+
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+            # Attaching or detaching if already attached
+            attached = attach_question(module_id, question_id, conn, cursor)
+            # Response
+            if attached:
+                raise ReturnSuccess('Question has been linked to module.', 201)
+            else:
+                raise ReturnSuccess('Question has been unlinked from module.', 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
 
 
 #  For attaching and detaching terms from modules
@@ -447,39 +591,56 @@ class AttachTerm(Resource):
         data = parser.parse_args()
         module_id = data['moduleID']
         term_id = data['termID']
-        # Finding associated MATCH question with term
-        query = f'''
-                SELECT question.* FROM question, answer
-                WHERE question.questionID = answer.questionID
-                AND answer.termID = {term_id}
-                '''
-        result = get_from_db(query)
-        # If term or match question does not exist
-        question_id = -1
-        if not result or not result[0]:
-            # Determining if term exists
-            result = get_from_db(f"SELECT front FROM term WHERE termID = {term_id}")
-            if result:
-                front = result[0]
-                # Creating a new MATCH question if missing (Only occurs for terms manually created through SQL)
-                post_to_db(f''' INSERT INTO question (`type`, `questionText`) VALUES ("MATCH", "What is the translation of {front}?")''')
-                query = "SELECT MAX(questionID) FROM question"
-                id_result = get_from_db(query)
-                question_id = check_max_id(id_result) - 1
-                post_to_db(f"INSERT INTO answer (`questionID`, `termID`) VALUES ({question_id}, {term_id})")
-            else:
-                return {'message' : 'Term does not exist or MATCH question has been deleted internally.'}, 400
-        # Getting question id if question already existed
-        if question_id == -1:
-            question_id = result[0][0]
 
-        # Attaching or detaching if already attached
-        attached = attach_question(module_id, question_id)
-        # Response
-        if attached:
-            return {'message' : 'Term has been linked to module.'}, 201
-        else:
-            return {'message' : 'Term has been unlinked from module.'}, 200
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+            # Finding associated MATCH question with term
+            query = f'''
+                    SELECT question.* FROM question, answer
+                    WHERE question.questionID = answer.questionID
+                    AND answer.termID = {term_id}
+                    '''
+            result = get_from_db(query)
+            # If term or match question does not exist
+            question_id = -1
+            if not result or not result[0]:
+                # Determining if term exists
+                result = get_from_db(f"SELECT front FROM term WHERE termID = {term_id}")
+                if result:
+                    front = result[0]
+                    # Creating a new MATCH question if missing (Only occurs for terms manually created through SQL)
+                    post_to_db(f''' INSERT INTO question (`type`, `questionText`) VALUES ("MATCH", "What is the translation of {front}?")''')
+                    query = "SELECT MAX(questionID) FROM question"
+                    id_result = get_from_db(query)
+                    question_id = check_max_id(id_result) - 1
+                    post_to_db(f"INSERT INTO answer (`questionID`, `termID`) VALUES ({question_id}, {term_id})")
+                else:
+                    raise CustomException('Term does not exist or MATCH question has been deleted internally.', 400)
+            # Getting question id if question already existed
+            if question_id == -1:
+                question_id = result[0][0]
+
+            # Attaching or detaching if already attached
+            attached = attach_question(module_id, question_id, conn, cursor)
+            # Response
+            if attached:
+                 raise ReturnSuccess('Term has been linked to module.', 201)
+            else:
+                raise ReturnSuccess('Term has been unlinked from module.', 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
 
 
 #  For attaching and detaching modules from group(s)
@@ -495,6 +656,7 @@ class AddModuleGroup(Resource):
         if not permission or not user_id:
             return "Invalid user", 401
 
+        group_id = data['groupID']
         if permission == 'st' and not is_ta(user_id, group_id):
             return "User not authorized to do this", 401
         
@@ -542,6 +704,39 @@ class AddModuleGroup(Resource):
                 conn.close()
 
 
+def convertModuleToJSON(module):
+    if len(module) < 4:
+        return errorMessage("Wrong amount of values in the object. Module record has 4 fields, or 5 with groupID")
+    
+    moduleObj = {}
+    moduleObj['moduleID'] = module[0]
+    moduleObj['name'] = module[1]
+    moduleObj['language'] = module[2]
+    moduleObj['complexity'] = module[3]
+    moduleObj['userID'] = module[4]
+
+    if len(module) > 5:
+        moduleObj['username'] = module[5]
+    
+    return moduleObj
+
+
+def GetCurrentTAList(professorID):
+    TA_list = []
+    get_ta_query = f"""
+                    SELECT user.userID FROM user 
+                    INNER JOIN group_user on group_user.userID = user.userID 
+                    AND group_user.groupID IN 
+                    (SELECT group_user.groupID from group_user WHERE group_user.userID = {professorID}) 
+                    WHERE group_user.accessLevel = 'ta'
+                    """
+    ta_results = get_from_db(get_ta_query)
+    if ta_results and ta_results[0]:
+        for ta in ta_results:
+            TA_list.append(ta[0])
+    return TA_list
+
+
 def convertToJSON(moduleRecord):
     if len(moduleRecord) < 4:
         return errorMessage("Wrong amount of values in the object. Module record has 4 fields, or 5 with groupID")
@@ -551,8 +746,9 @@ def convertToJSON(moduleRecord):
     moduleObj['name'] = moduleRecord[1]
     moduleObj['language'] = moduleRecord[2]
     moduleObj['complexity'] = moduleRecord[3]
+    moduleObj['userID'] = moduleRecord[4]
 
-    if len(moduleRecord) > 4:
-        moduleObj['groupID'] = moduleRecord[4]
+    if len(moduleRecord) > 5:
+        moduleObj['groupID'] = moduleRecord[5]
     
     return moduleObj
