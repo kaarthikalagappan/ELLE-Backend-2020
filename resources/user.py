@@ -15,6 +15,9 @@ from utils import *
 from random_username.generate import generate_username
 import json
 import datetime
+import string
+import random
+from config import HAND_PREFERENCES
 
 class CustomException(Exception):
     pass
@@ -419,6 +422,165 @@ class GetUsernames(Resource):
             if(conn.open):
                 cursor.close()
                 conn.close()
+
+
+class GenerateOTC(Resource):
+    @jwt_required
+    def get(self):
+        user_parser = reqparse.RequestParser()
+        data = user_parser.parse_args()
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+        
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            otc = otc_generator()
+            query = "UPDATE `user` SET `otc`=%s WHERE `userID`=%s"
+            results = post_to_db(query, (otc, user_id), conn, cursor)
+
+            raise ReturnSuccess({"otc" : otc}, 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except UserException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
+
+class OTCLogin(Resource):
+    def post(self):
+        user_parser = reqparse.RequestParser()
+        user_parser.add_argument('otc',
+                                  type=str,
+                                  required=True,
+                                )
+        data = user_parser.parse_args()
+        
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            query = "SELECT * FROM `user` WHERE `otc`=%s"
+            results = get_from_db(query, data['otc'], conn, cursor)
+            
+            # Remove the otc from user after logging in
+            if results and results[0]:
+                put_in_blacklist(results[0][0])
+                query = "UPDATE `user` SET `otc`=%s WHERE `userID`=%s"
+                post_to_db(query, (None,results[0][0]), conn, cursor)
+            else:
+                raise UserException("Invalid otc", 400)
+
+            expires = datetime.timedelta(days=14)
+            user_obj = UserObject(user_id=results[0][0], permissionGroup=results[0][4])
+            access_token = create_access_token(identity=user_obj, expires_delta=expires)
+            query = "UPDATE `user` SET `lastToken`=%s WHERE `userID` =%s"
+            post_to_db(query, (access_token , results[0][0]), conn, cursor)
+
+            raise ReturnSuccess({"access_token" : access_token, "id" : results[0][0]}, 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except UserException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
+
+class User_Preferences(Resource):
+    #Get current user's preferences
+    @jwt_required
+    def get(self):
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+
+        query = f"SELECT * from user_preferences WHERE userID = {user_id}"
+        user_preference = get_from_db(query)
+        if not user_preference or not user_preference[0]:
+            return "An error occured", 500
+        return userPreferencesToJSON(user_preference[0])
+
+    #Update the user preferences
+    @jwt_required
+    def put(self):
+        # Validate the user
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+        
+        parser = reqparse.RequestParser()
+        parser.add_argument('preferredHand',
+                            required = True,
+                            type = str,
+                            help = "preferred hand of each user is required. R for right hand, L for Left, or A for Ambidextrous")
+        parser.add_argument('vrGloveColor',
+                            required = True,
+                            type = str,
+                            help = "Specify a glove value that represents a glove color in VR game. Max 15 characters")
+        data = parser.parse_args()
+
+        if data['preferredHand'] not in HAND_PREFERENCES:
+            return "Please pass in either R, L, or A for hand preferences", 400
+
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            update_query = f"""
+                            UPDATE user_preferences SET
+                            preferredHand = '{data['preferredHand']}', vrGloveColor = '{data['vrGloveColor']}'
+                            WHERE user_preferences.userID = {user_id}
+                            """
+            post_to_db(update_query, None, conn, cursor)
+            
+            raise ReturnSuccess("Successfully updated preferences", 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except UserException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+        
+
+#Convert user_preferences information returned from the database into JSON obj
+def userPreferencesToJSON(data):
+    # Update this as the user_preferences table is updated
+    return {
+        'userPreferenceID' : data[0],
+        'userID' : data[1],
+        'preferredHand' : data[2],
+        'vrGloveColor' : data[3]
+    }
+
+
+def otc_generator(size=6, chars=string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
 
 def convertUserLevelsToJSON(userLevel):
     if len(userLevel) < 3:

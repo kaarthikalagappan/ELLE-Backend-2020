@@ -7,6 +7,8 @@ from db import mysql
 from db_utils import *
 from utils import *
 import os
+import datetime
+
 
 class CustomException(Exception):
     pass
@@ -55,13 +57,15 @@ class LoggedAnswer(Resource):
             elif data['correct'].lower() == 'true':
                 data['correct'] = '1'
 
+            formatted_time = datetime.datetime.now().time().strftime('%H:%M')
+
             if data['mode']:
-                query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`, `mode`) \
-                    VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']},{data['mode']})"
+                query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`, `mode`, `log_time`) \
+                    VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']},'{data['mode']}','{formatted_time}')"
                 post_to_db(query, None, conn, cursor)
             else:
-                query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`) \
-                    VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']})"
+                query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`, `log_time`) \
+                    VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']}, '{formatted_time}')"
                 post_to_db(query, None, conn, cursor)
             raise ReturnSuccess("Successfully created a logged_answer record", 205)
         except ReturnSuccess as success:
@@ -152,17 +156,17 @@ class GetLoggedAnswerCSV(Resource):
         # if not permission or not user_id or permission != 'su':
         #     return "Invalid user", 401
         
-        csv = 'Log ID, User ID, Username, Module ID, Module Name, Question ID, Term ID, Session ID, Correct, Mode\n'
+        csv = 'Log ID, User ID, Username, Module ID, Module Name, Question ID, Term ID, Session ID, Correct, Timestamp, Mode\n'
         query = """
                 SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name FROM logged_answer 
-                INNER JOIN session
+                INNER JOIN session ON session.sessionID = logged_answer.sessionID
                 INNER JOIN user ON user.userID = session.userID
                 INNER JOIN module on module.moduleID = session.moduleID
                 """
         results = get_from_db(query)
         if results and results[0]:
             for record in results:
-                csv = csv + f"""{record[0]}, {record[6]}, {record[7]}, {record[8]}, {record[9]}, {record[1]}, {record[2]}, {record[3]}, {record[4]}, {record[5]}\n"""
+                csv = csv + f"""{record[0]}, {record[7]}, {record[8]}, {record[9]}, {record[10]}, {record[1]}, {record[2]}, {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
         return Response(
             csv,
             mimetype="text/csv",

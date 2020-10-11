@@ -50,7 +50,7 @@ class Group(Resource):
             cursor = conn.cursor()
 
             if permission != 'pf':
-                return GroupException("User cannot create classes.", 400)
+                raise GroupException("User cannot create classes.", 400)
 
             # Checks if the groupName already exists
             dupe_query = "SELECT `groupID` FROM `group` WHERE `groupName`=%s"
@@ -79,7 +79,7 @@ class Group(Resource):
                 gu_query = "INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES (%s, %s, %s)"
                 post_to_db(gu_query, (user_id, group_id, 'pf'), conn, cursor)
 
-                raise ReturnSuccess("Sucecssfully created the class.", 200)
+                raise ReturnSuccess("Successfully created the class.", 200)
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -342,6 +342,49 @@ class UsersInGroup(Resource):
                     users.append(convertUsersToJSON(user))
             
             raise ReturnSuccess(users, 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
+class GenerateGroupCode(Resource):
+    @jwt_required
+    def get(self):
+        parser = reqparse.RequestParser()
+        parser.add_argument('groupID',
+                            required = True,
+                            type = int)
+        data = parser.parse_args()
+
+        permission, user_id = validate_permissions()
+
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            if permission == 'st':
+                raise GroupException("User cannot generate new group codes.", 400)
+
+            group_code = groupCode_generator()
+            while True:
+                gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`=%s"
+                gc_results = get_from_db(gc_query, group_code)
+
+                if gc_results:
+                    group_code = groupCode_generator()
+                else:
+                    break
+            
+            query = "UPDATE `group` SET `groupCode`=%s WHERE `groupID`=%s"
+            results = post_to_db(query, (group_code, data['groupID']), conn, cursor)
+
+            raise ReturnSuccess({"groupCode" : group_code}, 200)
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode

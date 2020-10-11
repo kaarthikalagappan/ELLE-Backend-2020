@@ -29,4 +29,8 @@ ACCESS_LEVELS = ['pf', 'st', 'ta'] #Permission groups of users in a group contex
 PERMISSION_LEVELS = list(set(ACCESS_LEVELS+PERMISSION_GROUPS)) #All available permission levels
 
 # List of game platforms
-GAME_PLATFORMS = ['vr', 'mb', 'pc']
+GAME_PLATFORMS = ['vr', 'mb', 'cp']
+
+# Enum values listed on database
+HAND_PREFERENCES = ['R', 'L', 'A']
+TERM_GENDERS = ['M', 'F', 'N']

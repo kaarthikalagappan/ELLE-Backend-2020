@@ -360,7 +360,7 @@ class Module(Resource):
         # Parsing JSON
         parser = reqparse.RequestParser()
         parser.add_argument('name', type=str, required=True)
-        parser.add_argument('language', type=str, required=False)
+        parser.add_argument('language', type=str, required=True)
         parser.add_argument('complexity', type=int, required=False)
         data = parser.parse_args()
         name = data['name']
