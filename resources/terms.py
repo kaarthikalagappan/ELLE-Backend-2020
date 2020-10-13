@@ -378,14 +378,13 @@ class Term(Resource):
 
                 query = "SELECT MAX(termID) FROM term"
                 result = get_from_db(query, None, conn, cursor)
-                maxID = check_max_id(result)
 
-                if DEBUG:
-                    print("Adding the term with termID: " + str(maxID))
-
-                query = "INSERT INTO term VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-                post_to_db(query, (maxID, data['imageID'], data['audioID'], data['front'],
+                query = "INSERT INTO term (`imageID`, `audioID`, `front`, `back`, `type`, `gender`, `language`) \
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)"
+                post_to_db(query, (data['imageID'], data['audioID'], data['front'],
                             data['back'], data['type'], data['gender'],data['language']), conn, cursor)
+                
+                maxID = cursor.lastrowid
                 
                 #Add the given list of tags
                 if 'tag' in data and data['tag']:
@@ -400,7 +399,7 @@ class Term(Resource):
                 #get the added question's ID
                 maxQuestionQuery = "SELECT MAX(questionID) FROM question"
                 result = get_from_db(maxQuestionQuery, None, conn, cursor)
-                questionMaxID = check_max_id(result) - 1
+                questionMaxID = result[0][0] if result and result[0] else 1
 
                 #link the term to the default question
                 insertAnswerQuery = "INSERT INTO answer (`questionID`, `termID`) VALUES (%s, %s)"
@@ -411,7 +410,6 @@ class Term(Resource):
                 post_to_db(insertModuleQuery, (data['moduleID'], str(questionMaxID)), conn, cursor)
 
                 raise ReturnSuccess({"Message" : "Successfully created a term", "termID" : int(maxID)}, 201)
-    
         except TermsException as error:
             conn.rollback()
             return error.msg, error.returnCode
@@ -642,6 +640,8 @@ class Specific_Term(Resource):
             if(conn.open):
                 cursor.close()
                 conn.close()
+
+
 class Tags_In_Term(Resource):
     @jwt_required
     #Get terms associated with a specific tagName
@@ -686,6 +686,25 @@ class Tags_In_Term(Resource):
             if(conn.open):
                 cursor.close()
                 conn.close()
+
+
+class TagCount(Resource):
+    #Get a count of how many terms are associated with each tag
+    @jwt_required
+    def get(self):
+        get_all_tags_query = "SELECT * FROM `tag`"
+        tags_list = get_from_db(get_all_tags_query)
+        tag_count = {}
+
+        for tag_record in tags_list:
+            tag_name = tag_record[1].lower()
+            if tag_name not in tag_count:
+                tag_count[tag_name] = 1
+            else:
+                tag_count[tag_name] = tag_count[tag_name] + 1
+            
+        return tag_count
+
 
 def addNewTags(tagList, termID, conn=None, cursor=None):
     for tag in tagList:

@@ -72,20 +72,18 @@ class Session(Resource):
             formatted_date = dateutil.parse(data['sessionDate']).strftime('%Y-%m-%d')
             formatted_time = datetime.datetime.now().time().strftime('%H:%M')
 
-            query = "SELECT MAX(sessionID) FROM session"
-            result = get_from_db(query, None, conn, cursor)
-            sessionID = check_max_id(result)
-
             if data['mode']:
-                query = f"INSERT INTO `session` (`sessionID`, `userID`, `moduleID`, `sessionDate`, `startTime`, `mode`, `platform`) \
-                    VALUES ({sessionID}, {user_id},{data['moduleID']},'{formatted_date}','{formatted_time}','{data['mode']}', \
+                query = f"INSERT INTO `session` (`userID`, `moduleID`, `sessionDate`, `startTime`, `mode`, `platform`) \
+                    VALUES ({user_id},{data['moduleID']},'{formatted_date}','{formatted_time}','{data['mode']}', \
                     '{data['platform'][:3]}')"
                 post_to_db(query, None, conn, cursor)
+                sessionID = cursor.lastrowid
             else:
-                query = f"INSERT INTO `session` (`sessionID`, `userID`, `moduleID`, `sessionDate`, `startTime`, `platform`) \
-                    VALUES ({sessionID}, {user_id},{data['moduleID']},'{formatted_date}','{formatted_time}', \
+                query = f"INSERT INTO `session` (`userID`, `moduleID`, `sessionDate`, `startTime`, `platform`) \
+                    VALUES ({user_id},{data['moduleID']},'{formatted_date}','{formatted_time}', \
                     '{data['platform'][:3]}')"
                 post_to_db(query, None, conn, cursor)
+                sessionID = cursor.lastrowid
             raise ReturnSuccess({'sessionID' : sessionID}, 201)
         except ReturnSuccess as success:
             conn.commit()

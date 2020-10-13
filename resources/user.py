@@ -314,8 +314,8 @@ class CheckIfActive(Resource):
             return "Invalid user", 401
 
         if find_by_token(data['token']):
-            return user_id
-        return -1, 400
+            return user_id, 200
+        return -1, 401
 
 
 

@@ -17,9 +17,10 @@ def get_module_headers():
     return get_from_db(query)
 
 
-def query_sessions(query):
-    result = get_from_db(query)
+def query_sessions(query, parameters=None):
+    result = get_from_db(query, parameters)
     sessions = []
+    
     for row in result:
         session = {}
         session['sessionID'] = row[0]
@@ -31,8 +32,9 @@ def query_sessions(query):
         session['endTime'] = row[6]
         session['platform'] = row[7]
         # Ignoring unfinished sessions
-        if session['endTime'] != None:
+        if session['endTime'] != None and session['startTime'] != None and session['playerScore'] != None:
             sessions.append(session)
+
     return sessions
 
 
@@ -94,6 +96,10 @@ class PlatformNames(Resource):
 class ModuleStats(Resource):
     @jwt_required
     def get(self):
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+        
         parser = reqparse.RequestParser()
         parser.add_argument('moduleID', required=True, type=str, help="Please supply the ID of the module you wish to look up.")
         data = parser.parse_args()
@@ -109,6 +115,35 @@ class ModuleStats(Resource):
             stats.append(stat)
         return stats
         
+
+# Provides the average score and session duration for the given module in every platform
+class AllModuleStats(Resource):
+    @jwt_required
+    def get(self):
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+        
+        if permission == 'su':
+            query = "SELECT * FROM session WHERE platform = %s"
+        elif permission == 'pf':
+            query = "SELECT * FROM session INNER JOIN group_user ON group_user.userID = " + str(user_id) + \
+                    " INNER JOIN group_module ON group_module.groupID = group_user.groupID \
+                    WHERE session.platform = %s AND session.moduleID = group_module.moduleID"
+        else:
+            query = "SELECT * FROM session WHERE userID = " + str(user_id) + " AND platform = %s"
+
+        stats = []
+        for platform in GAME_PLATFORMS:
+            sessions = query_sessions(query, platform)
+            stat = get_averages(sessions)
+            if not stat:
+                continue
+            stat['platform'] = platform
+            stats.append(stat)
+        
+        return stats
+
 
 # # Provides the average scores and session durations for the given game
 # class PlatformStats(Resource):

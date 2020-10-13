@@ -89,6 +89,9 @@ class LoggedAnswer(Resource):
         parser.add_argument('userID',
                             required = False,
                             type = str)
+        parser.add_argument('sessionID',
+                            required = False,
+                            type = str)
         data = parser.parse_args()
 
         permission, user_id = validate_permissions()
@@ -104,6 +107,11 @@ class LoggedAnswer(Resource):
             else:
                 moduleExp = " = " + str(data['moduleID'])
             
+            if not data['sessionID'] or data['sessionID'] == "":
+                sessionID = "REGEXP '.*'"
+            else:
+                sessionID = " = " + str(data['sessionID'])
+            
             #TODO: STUDENT USERS CAN ONLY PULL THEIR OWN RECORDS, ONLY ADMINS AND SUPER USERS
             # CAN REQUEST OTHER STUDENTS' OR ALL SESSIONS
             if (not data['userID'] or data['userID'] == "") and (permission == 'pf' or permission == 'su'):
@@ -113,9 +121,11 @@ class LoggedAnswer(Resource):
             else:
                 userExp = " = " + str(user_id)
             
-            getQuestionsQuery = f"""SELECT DISTINCT sessionID FROM session 
-                                    WHERE moduleID {moduleExp} AND
-                                    userID {userExp}"""
+            getQuestionsQuery = f"""
+                                SELECT DISTINCT sessionID FROM session 
+                                WHERE moduleID {moduleExp} AND
+                                userID {userExp} AND sessionID {sessionID}
+                                """
             sessionIDList = get_from_db(getQuestionsQuery, None, conn, cursor)
 
             getLoggedAnswerQuery = "SELECT * FROM logged_answer WHERE sessionID = %s"

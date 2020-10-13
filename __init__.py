@@ -1,25 +1,36 @@
 #Some of the imports are not used; they were copied and pasted from the existing Flask app's __init__.py
-from flask import Flask, render_template, Response, request, send_file, send_from_directory, jsonify
+from flask import (Flask, render_template, Response, 
+				   request, send_file, send_from_directory, jsonify)
 from flask_restful import Resource, Api
 from flask_jwt_extended import JWTManager
 from flaskext.mysql import MySQL
-import config
 from flask_cors import CORS
-from resources.testing import Testing, JWTTest
-from resources.user import UserRegister, Users, UserLogin, UserLogout, User, ResetPassword, CheckIfActive, UsersHighscores, UserLevels, GenerateUsername, GetUsernames, GenerateOTC, OTCLogin, User_Preferences
-from resources.terms import Term, Tags, Tag_Term, Tags_In_Term, Specific_Term
-from resources.game_logs import GameLog
-from resources.logged_answer import LoggedAnswer, GetLoggedAnswerCSV
-from resources.sessions import Session, SearchSessions, End_Session, GetAllSessions, GetSessionCSV
-from resources.question import Question, Answer, SearchType, SearchText, DeleteQuestion, DeleteAnswer, Modify
-from resources.modules import Modules, ModuleQuestions, Module, AttachQuestion, AttachTerm, RetrieveAllModules, RetrieveGroupModules, AddModuleGroup, SearchModules, RetrieveUserModules
-from resources.stats import ModuleReport, ModuleStats, PlatformStats, PlatformNames, LanguageStats
-from resources.access import Access
-from resources.group import Group, GroupRegister, SearchUserGroups, UsersInGroup, GenerateGroupCode
 from db import mysql
 from db_utils import *
 from pathlib import Path
+from resources.user import (UserRegister, Users, UserLogin, UserLogout, 
+							User, ResetPassword, CheckIfActive, UsersHighscores, 
+							UserLevels, GenerateUsername, GetUsernames, 
+							GenerateOTC, OTCLogin, User_Preferences)
+from resources.terms import (Term, Tags, Tag_Term, Tags_In_Term, 
+							 Specific_Term, TagCount)
+from resources.sessions import (Session, SearchSessions, End_Session, 
+								GetAllSessions, GetSessionCSV)
+from resources.question import (Question, Answer, SearchType, SearchText, 
+								DeleteQuestion, DeleteAnswer, Modify)
+from resources.modules import (Modules, ModuleQuestions, Module, AttachQuestion, 
+							   AttachTerm, RetrieveAllModules, RetrieveGroupModules, 
+							   AddModuleGroup, SearchModules, RetrieveUserModules)
+from resources.stats import (ModuleReport, ModuleStats, PlatformStats, 
+							 PlatformNames, LanguageStats, AllModuleStats)
+from resources.access import Access
+from resources.group import (Group, GroupRegister, SearchUserGroups, 
+							 UsersInGroup, GenerateGroupCode)
+from resources.testing import Testing, JWTTest
+from resources.game_logs import GameLog
+from resources.logged_answer import LoggedAnswer, GetLoggedAnswerCSV
 import os.path
+import config
 
 app = Flask(__name__, static_folder='templates/build', static_url_path='/')
 CORS(app)
@@ -146,6 +157,8 @@ api.add_resource(GenerateOTC, API_ENDPOINT_PREFIX+'generateotc')
 api.add_resource(OTCLogin, API_ENDPOINT_PREFIX+'otclogin')
 api.add_resource(User_Preferences, API_ENDPOINT_PREFIX+'userpreferences')
 api.add_resource(LanguageStats, API_ENDPOINT_PREFIX+'languagestats')
+api.add_resource(AllModuleStats, API_ENDPOINT_PREFIX+'allmodulestats')
+api.add_resource(TagCount, API_ENDPOINT_PREFIX+'tagcount')
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port='3000', debug=True)
