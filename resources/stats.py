@@ -230,7 +230,8 @@ class PlatformStats(Resource):
                                'total_records_avail' : total_platform_objs}
         
         for platform in GAME_PLATFORMS:
-            stats[platform]['frequency'] = stats[platform]['frequency']/frequency_objs if frequency_objs != 0 else 0
+            if platform in stats:
+                stats[platform]['frequency'] = stats[platform]['frequency']/frequency_objs if frequency_objs != 0 else 0
 
         return stats
 
