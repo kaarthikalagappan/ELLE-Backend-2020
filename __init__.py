@@ -11,7 +11,7 @@ from pathlib import Path
 from resources.user import (UserRegister, Users, UserLogin, UserLogout, 
 							User, ResetPassword, CheckIfActive, UsersHighscores, 
 							UserLevels, GenerateUsername, GetUsernames, 
-							GenerateOTC, OTCLogin, User_Preferences)
+							GenerateOTC, OTCLogin, User_Preferences, Refresh)
 from resources.terms import (Term, Tags, Tag_Term, Tags_In_Term, 
 							 Specific_Term, TagCount)
 from resources.sessions import (Session, SearchSessions, End_Session, 
@@ -159,6 +159,7 @@ api.add_resource(User_Preferences, API_ENDPOINT_PREFIX+'userpreferences')
 api.add_resource(LanguageStats, API_ENDPOINT_PREFIX+'languagestats')
 api.add_resource(AllModuleStats, API_ENDPOINT_PREFIX+'allmodulestats')
 api.add_resource(TagCount, API_ENDPOINT_PREFIX+'tagcount')
+api.add_resource(Refresh, API_ENDPOINT_PREFIX+'refresh')
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port='3000', debug=True)

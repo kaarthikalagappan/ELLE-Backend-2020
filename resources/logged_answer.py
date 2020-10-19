@@ -128,7 +128,9 @@ class LoggedAnswer(Resource):
                                 """
             sessionIDList = get_from_db(getQuestionsQuery, None, conn, cursor)
 
-            getLoggedAnswerQuery = "SELECT * FROM logged_answer WHERE sessionID = %s"
+            getLoggedAnswerQuery = "SELECT logged_answer.*, term.front FROM logged_answer \
+                                    INNER JOIN term ON term.termID = logged_answer.termID \
+                                    WHERE sessionID = %s"
             loggedAnswers = []
 
             for sessionID in sessionIDList:
@@ -140,7 +142,8 @@ class LoggedAnswer(Resource):
                         'termID' : result[2],
                         'sessionID' : result[3],
                         'correct' : result[4],
-                        'mode' : result[5]
+                        'mode' : result[5],
+                        'front' : result[7]
                     }
                     loggedAnswers.append(la_record)
 

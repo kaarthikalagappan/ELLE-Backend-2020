@@ -167,7 +167,7 @@ class Term(Resource):
             data['termID'] = None
 
         if not data['gender']:
-            data['gender'] = None
+            data['gender'] = 'N'
         else:
             data['gender'] = data['gender'][:1]
  

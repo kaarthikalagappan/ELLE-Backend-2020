@@ -446,7 +446,7 @@ class Module(Resource):
                     """
             post_to_db(query)
 
-            query = "SELECT `*` FROM `module` WHERE `moduleID`=%s"
+            query = "SELECT * FROM `module` WHERE `moduleID`=%s"
             results = get_from_db(query, data['moduleID'])
             if not results or not results[0]:
                 raise CustomException("Non existant module", 400)

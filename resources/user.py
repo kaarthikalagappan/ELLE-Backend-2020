@@ -2,8 +2,11 @@ from flask import request
 from flask_restful import Resource, reqparse
 from flask_jwt_extended import (
     create_access_token,
+    create_refresh_token,
     get_jwt_identity,
+    get_jwt_claims,
     jwt_required,
+    jwt_refresh_token_required,
     get_raw_jwt,
     get_current_user
 )
@@ -189,10 +192,12 @@ class UserLogin(Resource):
                 expires = datetime.timedelta(days=14)
                 user_obj = UserObject(user_id=user[0], permissionGroup=user[4])
                 access_token = create_access_token(identity=user_obj, expires_delta=expires)
+                refresh_token = create_refresh_token(identity=user_obj)
                 query = "UPDATE `user` SET `lastToken`=%s WHERE `userID` =%s"
                 post_to_db(query, (access_token , user[0]))
                 return {
                     'access_token': access_token,
+                    'refresh_token' : refresh_token,
                     'id':user[0]
                 }, 200
             else:
@@ -485,10 +490,11 @@ class OTCLogin(Resource):
             expires = datetime.timedelta(days=14)
             user_obj = UserObject(user_id=results[0][0], permissionGroup=results[0][4])
             access_token = create_access_token(identity=user_obj, expires_delta=expires)
+            refresh_token = create_refresh_token(identity=user_obj)
             query = "UPDATE `user` SET `lastToken`=%s WHERE `userID` =%s"
             post_to_db(query, (access_token , results[0][0]), conn, cursor)
 
-            raise ReturnSuccess({"access_token" : access_token, "id" : results[0][0]}, 200)
+            raise ReturnSuccess({"access_token" : access_token, "refresh_token" : refresh_token, "id" : results[0][0]}, 200)
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -510,6 +516,7 @@ class User_Preferences(Resource):
     def get(self):
         # Validate the user
         permission, user_id = validate_permissions()
+        print(permission)
         if not permission or not user_id:
             return "Invalid user", 401
 
@@ -566,6 +573,19 @@ class User_Preferences(Resource):
             if(conn.open):
                 cursor.close()
                 conn.close()
+
+
+class Refresh(Resource):
+    @jwt_refresh_token_required
+    def post(self):
+        user_id = get_jwt_identity()
+        query = f"SELECT `permissionGroup` FROM `user` WHERE `userID`= {user_id}"
+        permission = get_from_db(query)
+        print(permission[0][0])
+
+        user_obj = UserObject(user_id=user_id, permissionGroup=permission[0][0])
+        return { 'access_token': create_access_token(identity=user_obj), 'user_id' : user_id }, 200
+    
         
 
 #Convert user_preferences information returned from the database into JSON obj

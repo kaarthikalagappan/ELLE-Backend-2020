@@ -123,25 +123,35 @@ class AllModuleStats(Resource):
         permission, user_id = validate_permissions()
         if not permission or not user_id:
             return "Invalid user", 401
-        
+
         if permission == 'su':
-            query = "SELECT * FROM session WHERE platform = %s"
+            query = "SELECT DISTINCT moduleID FROM module"
         elif permission == 'pf':
-            query = "SELECT * FROM session INNER JOIN group_user ON group_user.userID = " + str(user_id) + \
-                    " INNER JOIN group_module ON group_module.groupID = group_user.groupID \
-                    WHERE session.platform = %s AND session.moduleID = group_module.moduleID"
+            query = "SELECT DISTINCT moduleID FROM module" \
+                    " INNER JOIN group_user ON group_user.userID = " + str(user_id) + \
+                    " INNER JOIN group_module ON group_module.groupID = group_user.groupID"
         else:
-            query = "SELECT * FROM session WHERE userID = " + str(user_id) + " AND platform = %s"
+            query = "SELECT DISTINCT moduleID FROM module" \
+                    " INNER JOIN group_user ON group_user.userID = " + str(user_id) + \
+                    " INNER JOIN group_module ON group_module.groupID = group_user.groupID"
+        
+        moduleIDs = get_from_db(query)
+
+        query = "SELECT * FROM session WHERE moduleID = %s"
 
         stats = []
-        for platform in GAME_PLATFORMS:
-            sessions = query_sessions(query, platform)
+        for moduleID in moduleIDs:
+            sessions = query_sessions(query, moduleID)
             stat = get_averages(sessions)
             if not stat:
                 continue
-            stat['platform'] = platform
+            mn_query = f"SELECT name FROM module WHERE moduleID = {moduleID[0]}"
+            module_name = get_from_db(mn_query)
+            stat['moduleID'] = moduleID[0]
+            stat['name'] = module_name[0][0]
             stats.append(stat)
-        
+
+        stats.sort(reverse=True, key=lambda s: s['averageScore'])
         return stats
 
 
@@ -232,6 +242,13 @@ class PlatformStats(Resource):
         for platform in GAME_PLATFORMS:
             if platform in stats:
                 stats[platform]['frequency'] = stats[platform]['frequency']/frequency_objs if frequency_objs != 0 else 0
+            else:
+                stats[platform] = {'frequency' : 0.0, \
+                                   'total_score' : 0, \
+                                   'time_spent' : "0:00:00", \
+                                   'avg_score' : 0.00, \
+                                   'avg_time_spent' : "0:00:00", \
+                                   'total_records_avail' : 0}
 
         return stats
 
@@ -256,6 +273,6 @@ class LanguageStats(Resource):
         for lang_code in lang_count:
             lang_count[lang_code] = lang_count[lang_code]/total_counter
         
-        lang_count = {key: val for key, val in sorted(lang_count.items(), key=lambda item: item[1])}
+        lang_count = {key: val for key, val in sorted(lang_count.items(), key=lambda item: item[1], reverse=True)}
 
         return lang_count, 200
