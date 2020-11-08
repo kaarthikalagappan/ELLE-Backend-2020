@@ -12,6 +12,7 @@ from flask_jwt_extended import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from flaskext.mysql import MySQL
+from flask_mail import Message
 from db import mysql
 from db_utils import *
 from utils import *
@@ -46,13 +47,22 @@ class UserException(Exception):
         self.returnCode = returnCode
 
 def find_by_name(username):
-
     query = "SELECT * FROM user WHERE username=%s"
     result = get_from_db(query, (username,))
 
     for row in result:
-        if row[1] == username:
+        if row[1].lower() == username:
             return True, row
+
+    return False, None
+
+def find_by_email(email):
+
+    query = "SELECT user.userID FROM user WHERE email=%s"
+    result = get_from_db(query, email)
+
+    if result and result[0]:
+            return True, result[0][0]
 
     return False, None
 
@@ -88,7 +98,6 @@ class UserObject:
         self.permissionGroup = permissionGroup
 
 
-
 #TODO: GOT TO CHANGE THIS LOGIC AS GROUPID ISN'T REQUIRED - JUST THE groupCode
 def check_group_db(id, password):
     query = "SELECT * FROM `group` WHERE `groupID`=%s"
@@ -109,7 +118,7 @@ class Users(Resource):
         if not permission or not user_id or permission != 'su':
             return "Invalid user", 401
 
-        query = "SELECT * FROM user"
+        query = f"SELECT * FROM user WHERE user.userID != {user_id}"
         result = get_from_db(query)
 
         final_list_users = []
@@ -149,11 +158,42 @@ class User(Resource):
             newUserObject['id'] = row[0]
             newUserObject['username'] = row[1]
             newUserObject['permissionGroup'] = row[4]
-            newUserObject['lastToken'] = row[5]
+            # newUserObject['lastToken'] = row[5]
+            newUserObject['email'] = row[7]
         return newUserObject
 
+    @jwt_required
+    def put(self):
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Invalid user", 401
+        
+        user_parser = reqparse.RequestParser()
+        user_parser.add_argument('newEmail',
+                                  type=str,
+                                  required=True,
+                                  )
+        data = user_parser.parse_args()
 
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+            if data['newEmail'] == '':
+                data['newEmail'] = None
+            update_email_query = f"UPDATE `user` SET `email` = '{data['newEmail']}' WHERE `user`.`userID` = {user_id}"
+            post_to_db(update_email_query)
 
+            raise ReturnSuccess("Successfully changed email", 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
 
 
 #logs user out and sets their lastToken to null
@@ -205,7 +245,6 @@ class UserLogin(Resource):
         return{'message':'User Not Found!'}, 401
 
 
-
 #register the user to the database
 class UserRegister(Resource):
     def post(self):
@@ -221,6 +260,10 @@ class UserRegister(Resource):
         user_parser.add_argument('password_confirm',
                                   type=str,
                                   required=True,
+                                  )
+        user_parser.add_argument('email',
+                                  type=str,
+                                  required=False,
                                   )
         user_parser.add_argument('groupCode',
                                   type=str,
@@ -242,14 +285,25 @@ class UserRegister(Resource):
             if find_user == True:
                 raise UserException("Username already exists.", 401)
 
-            query = "INSERT INTO user (`username`, `password`, `permissionGroup`) VALUES (%s, %s, %s)"
+            if not data['email']:
+                data['email'] = ''
+            else:
+                data['email'] = data['email'].lower()
+                find_email, _ = find_by_email(data['email'])
+                if find_email:
+                    raise UserException("Email already exists.", 401)
+ 
+            query = "INSERT INTO user (`username`, `password`, `permissionGroup`, `email`) VALUES (%s, %s, %s, %s)"
             salted_password = generate_password_hash(data['password'])
-
-            post_to_db(query, (data['username'], salted_password,'st'), conn, cursor)
+            # print(data['email'])
+            post_to_db(query, (data['username'], salted_password, 'st', data['email']), conn, cursor)
 
             query = "SELECT `userID` FROM `user` WHERE `username`=%s"
             results = get_from_db(query, data['username'], conn, cursor)
             user_id = results[0][0]
+
+            add_preferences = f"INSERT INTO user_preferences (userID) VALUES ('{user_id}')"
+            post_to_db(add_preferences, None, conn, cursor)
 
             if data['groupCode']:
                 gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`=%s"
@@ -278,30 +332,193 @@ class UserRegister(Resource):
 class ResetPassword(Resource):
     def post(self):
         user_parser = reqparse.RequestParser()
-        user_parser.add_argument('userID',
-                                  type=int,
-                                  required=True,
-                                  )
-        user_parser.add_argument('pw',
+        user_parser.add_argument('email',
                                   type=str,
                                   required=True,
                                   )
-        user_parser.add_argument('confirm',
+        user_parser.add_argument('resetToken',
+                                  type=str,
+                                  required=True,
+                                  )
+        user_parser.add_argument('password',
+                                  type=str,
+                                  required=True,
+                                  )
+        user_parser.add_argument('confirmPassword',
                                   type=str,
                                   required=True,
                                   )
         data = user_parser.parse_args()
 
-        if data['pw'] != data['confirm']:
-            return {'message':'Passwords do not match!'},400
+        if data['password'] != data['confirmPassword']:
+            return {'Message':'Passwords do not match!'}, 400
 
-        pw = generate_password_hash(data['pw'])
+        get_associated_user = f"""SELECT user.userID, user.pwdResetToken FROM user 
+                              WHERE user.email = '{data['email'].lower()}'
+                              """
+        print(data)
+        associated_user = get_from_db(get_associated_user)
 
-        query = "UPDATE user SET password=%s WHERE userID=" + str(data['userID'])
+        if not associated_user or not associated_user[0] \
+           or not associated_user[0][1] \
+           or not check_password_hash(associated_user[0][1], data['resetToken']):
+            return {"Message" : "No records match what was provided"}, 404
+        
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+            
+            password = generate_password_hash(data['password'])
+            query = f"UPDATE user SET pwdResetToken = NULL, password = '{password}' WHERE userID = {associated_user[0][0]}"
+            post_to_db(query, None, conn, cursor)
 
-        post_to_db(query, (pw,))
+            raise ReturnSuccess("Successfully reset password", 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error))
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
 
-        return {'message':'Successfully reset the password'}, 201
+
+# Send a reset token to the email for user to reset password
+class ForgotPassword(Resource):
+    def __init__(self, **kwargs):
+        # smart_engine is a black box dependency
+        self.mail = kwargs['mail']
+
+    def post(self):
+        user_parser = reqparse.RequestParser()
+        user_parser.add_argument('email',
+                                  type=str,
+                                  required=True,
+                                  )
+        data = user_parser.parse_args()
+        data['email'] = data['email'].lower()
+
+        returnMessage = {"Message" : "Processed"}
+
+        get_user = f"SELECT user.userID FROM user WHERE user.email = '{data['email']}'"
+        associated_user = get_from_db(get_user)
+        if not associated_user or not associated_user[0]:
+            return returnMessage, 202
+        
+        resetToken = otc_generator(20, string.hexdigits + '!#_@')
+        check_token_query = f"SELECT user.userID FROM user WHERE user.pwdResetToken = '{resetToken}'"
+        if_exist = get_from_db(check_token_query)
+        print(resetToken)
+        while if_exist and if_exist[0]:
+            resetToken = otc_generator(20, string.hexdigits + '!#_@')
+            check_token_query = f"SELECT user.userID FROM user WHERE user.pwdResetToken = '{resetToken}'"
+            if_exist = get_from_db(check_token_query)
+
+        update_pwdToken_query = f"UPDATE user SET pwdResetToken = '{generate_password_hash(resetToken)}' WHERE userID = {associated_user[0][0]}"
+        post_to_db(update_pwdToken_query)
+
+        # msg = Message("Hello",
+        #             sender="endless@endlesslearner.com",
+        #             recipients=[data['email']])
+        # msg.body = f"""You are recieving this email because you requested to reset your Endlesslearner password.
+        #             Please visit https://endlesslearner.com/resetpassword and use the token {resetToken} to reset your password.
+        #             If you did not request to reset your password, ignore this email."""
+        # self.mail.send(msg)
+
+        return returnMessage, 202
+
+
+class ChangePassword(Resource):
+    # This API to used to reset another user's password or the current user's password
+    @jwt_required
+    def post(self):
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return "Unauthorized user", 401
+
+        user_parser = reqparse.RequestParser()
+        user_parser.add_argument('userID',
+                                  type=str,
+                                  required=False,
+                                  )
+        user_parser.add_argument('password',
+                                  type=str,
+                                  required=True,
+                                  )
+        data = user_parser.parse_args()
+        print(data)
+        try:
+            conn = mysql.connect()
+            cursor = conn.cursor()
+
+            if permission == 'pf' and data['userID'] and data['userID'] != '':
+                get_user_status = f"SELECT user.permissionGroup FROM user WHERE user.userID = {data['userID']}"
+                user_status = get_from_db(get_user_status, None, conn, cursor)
+                if not user_status or not user_status[0]:
+                    raise UserException("Referred user not found", 400)
+                if user_status[0][0] != 'st':
+                    raise UserException("A professor cannot reset non-student users' password", 400)
+
+            # Only superadmins and professors can reset another user's password
+            if permission != 'su' and permission != 'pf' and data['userID']:
+                raise UserException("Cannot reset another user's password", 400)
+            elif ((permission == 'su' or permission == 'pf') and (not data['userID'] or data['userID'] == '')) or permission == 'st':
+                data['userID'] = user_id
+ 
+            password = generate_password_hash(data['password'])
+            query = f"UPDATE user SET password = '{password}' WHERE userID = {data['userID']}"
+            post_to_db(query, None, conn, cursor)
+          
+            raise ReturnSuccess("Successfully reset password", 200)
+        except ReturnSuccess as success:
+            conn.commit()
+            return success.msg, success.returnCode
+        except UserException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
+        except Exception as error:
+            conn.rollback()
+            return errorMessage(str(error)), 500
+        finally:
+            if(conn.open):
+                cursor.close()
+                conn.close()
+
+
+# Send a reset token to the email for user to reset password
+class ForgotUsername(Resource):
+    def __init__(self, **kwargs):
+        # smart_engine is a black box dependency
+        self.mail = kwargs['mail']
+
+    def post(self):
+        user_parser = reqparse.RequestParser()
+        user_parser.add_argument('email',
+                                  type=str,
+                                  required=True,
+                                  )
+        data = user_parser.parse_args()
+        data['email'] = data['email'].lower()
+
+        returnMessage = {"Message" : "Processed"}
+
+        get_user = f"SELECT user.username FROM user WHERE user.email = '{data['email']}'"
+        username = get_from_db(get_user)
+        if not username or not username[0]:
+            return returnMessage, 202
+
+        msg = Message("Hello",
+                    sender="endless@endlesslearner.com",
+                    recipients=[data['email']])
+        msg.body = f"""You are recieving this email because you requested to receive your Endlesslearner username.
+                    The username associated with this email is {username[0][0]}.
+                    Please visit https://endlesslearner.com/login to login with that username."""
+        self.mail.send(msg)
+
+        return returnMessage, 202
+
 
 #Checks to see whether given token is active or not
 class CheckIfActive(Resource):
@@ -390,6 +607,7 @@ class UserLevels(Resource):
             if(conn.open):
                 cursor.close()
                 conn.close()
+
 
 class GenerateUsername(Resource):
     def get(self):
@@ -579,7 +797,7 @@ class Refresh(Resource):
     @jwt_refresh_token_required
     def post(self):
         user_id = get_jwt_identity()
-        query = f"SELECT `permissionGroup` FROM `user` WHERE `userID`= {user_id}"
+        query = f"SELECT `permissionGroup`, `email` FROM `user` WHERE `userID`= {user_id}"
         permission = get_from_db(query)
         print(permission[0][0])
 

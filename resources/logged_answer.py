@@ -8,6 +8,8 @@ from db_utils import *
 from utils import *
 import os
 import datetime
+import redis
+from config import REDIS_HOST, REDIS_PORT, REDIS_CHARSET
 
 
 class CustomException(Exception):
@@ -143,7 +145,7 @@ class LoggedAnswer(Resource):
                         'sessionID' : result[3],
                         'correct' : result[4],
                         'mode' : result[5],
-                        'front' : result[7]
+                        'front' : result[9]
                     }
                     loggedAnswers.append(la_record)
 
@@ -169,17 +171,81 @@ class GetLoggedAnswerCSV(Resource):
         # if not permission or not user_id or permission != 'su':
         #     return "Invalid user", 401
         
-        csv = 'Log ID, User ID, Username, Module ID, Module Name, Question ID, Term ID, Session ID, Correct, Timestamp, Mode\n'
-        query = """
-                SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name FROM logged_answer 
-                INNER JOIN session ON session.sessionID = logged_answer.sessionID
-                INNER JOIN user ON user.userID = session.userID
-                INNER JOIN module on module.moduleID = session.moduleID
-                """
-        results = get_from_db(query)
-        if results and results[0]:
-            for record in results:
-                csv = csv + f"""{record[0]}, {record[7]}, {record[8]}, {record[9]}, {record[10]}, {record[1]}, {record[2]}, {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
+        try:
+            redis_conn = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, charset=REDIS_CHARSET, decode_responses=True)
+        except redis.exceptions.ConnectionError:
+            redis_conn = None
+
+        checksum_query = "CHECKSUM TABLE logged_answer"
+        checksum = get_from_db(checksum_query)
+        checksum = str(checksum[0][1])
+
+        if redis_conn is not None:
+            logged_ans_chks = redis_conn.get('logged_ans_chks')
+        else:
+            logged_ans_chks = None
+
+        if checksum == logged_ans_chks:
+            print("1")
+            csv = redis_conn.get('logged_ans_csv')
+        else:
+            last_query = "SELECT MAX(logged_answer.logID) FROM logged_answer"
+            last_db_id = get_from_db(last_query)
+            last_db_id = str(last_db_id[0][0])
+
+            if redis_conn is not None:
+                last_rd_id = redis_conn.get('last_logged_ans_id')
+            else:
+                last_rd_id = None
+
+            count_query = "SELECT COUNT(*) FROM logged_answer"
+            db_count = get_from_db(count_query)
+            db_count = str(db_count[0][0])
+
+            if redis_conn is not None:
+                rd_log_ans_count = redis_conn.get('log_ans_count')
+            else:
+                rd_log_ans_count = None
+
+            if db_count != rd_log_ans_count or rd_log_ans_count is None:
+                print("2")
+                csv = 'Log ID, User ID, Username, Module ID, Module Name, Question ID, Term ID, Session ID, Correct, Log time, Mode\n'
+                query = """
+                        SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name FROM logged_answer 
+                        INNER JOIN session ON session.sessionID = logged_answer.sessionID
+                        INNER JOIN user ON user.userID = session.userID
+                        INNER JOIN module on module.moduleID = session.moduleID
+                        """
+                results = get_from_db(query)
+                if results and results[0]:
+                    for record in results:
+                        csv = csv + f"""{record[0]}, {record[7]}, {record[8]}, {record[9]}, {record[10]}, {record[1]}, {record[2]}, {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
+            else:
+                print("3")
+                csv = ""
+                query = f"""
+                        SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name FROM logged_answer 
+                        INNER JOIN session ON session.sessionID = logged_answer.sessionID
+                        INNER JOIN user ON user.userID = session.userID
+                        INNER JOIN module on module.moduleID = session.moduleID
+                        WHERE logID > {last_db_id}
+                        """
+                results = get_from_db(query)
+                if redis_conn.get('logged_ans_csv') is not None:
+                    csv = redis_conn.get('logged_ans_csv')
+
+                if results and results[0]:
+                    for record in results:
+                        csv = csv + f"""{record[0]}, {record[7]}, {record[8]}, {record[9]}, {record[10]}, {record[1]}, {record[2]}, {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
+
+            last_record_id = results[-1][0]
+            
+            if redis_conn is not None:
+                redis_conn.set('logged_ans_csv', csv)
+                redis_conn.set('logged_ans_chks', checksum)
+                redis_conn.set('last_logged_ans_id', last_record_id)
+                redis_conn.set('log_ans_count', db_count)
+
         return Response(
             csv,
             mimetype="text/csv",

@@ -199,6 +199,7 @@ def validate_permissions():
     permission = get_jwt_claims()
     user_id = get_jwt_identity()
 
+    permission = permission['permission']
     if not user_id or user_id == '' or \
        not permission or permission == '' or \
        permission not in PERMISSION_LEVELS:

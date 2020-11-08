@@ -5,13 +5,15 @@ from flask_restful import Resource, Api
 from flask_jwt_extended import JWTManager
 from flaskext.mysql import MySQL
 from flask_cors import CORS
+from flask_mail import Mail
 from db import mysql
 from db_utils import *
 from pathlib import Path
 from resources.user import (UserRegister, Users, UserLogin, UserLogout, 
 							User, ResetPassword, CheckIfActive, UsersHighscores, 
 							UserLevels, GenerateUsername, GetUsernames, 
-							GenerateOTC, OTCLogin, User_Preferences, Refresh)
+							GenerateOTC, OTCLogin, User_Preferences, Refresh,
+							ForgotPassword, ChangePassword, ForgotUsername)
 from resources.terms import (Term, Tags, Tag_Term, Tags_In_Term, 
 							 Specific_Term, TagCount)
 from resources.sessions import (Session, SearchSessions, End_Session, 
@@ -22,7 +24,8 @@ from resources.modules import (Modules, ModuleQuestions, Module, AttachQuestion,
 							   AttachTerm, RetrieveAllModules, RetrieveGroupModules, 
 							   AddModuleGroup, SearchModules, RetrieveUserModules)
 from resources.stats import (ModuleReport, ModuleStats, PlatformStats, 
-							 PlatformNames, LanguageStats, AllModuleStats)
+							 PlatformNames, LanguageStats, AllModuleStats,
+							 TermsPerformance)
 from resources.access import Access
 from resources.group import (Group, GroupRegister, SearchUserGroups, 
 							 UsersInGroup, GenerateGroupCode)
@@ -44,9 +47,15 @@ app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access']  # allow blacklisting for 
 app.config['UPLOAD_FOLDER'] = Path('uploads') #??
 app.config['PROPOGATE_EXCEPTIONS'] = True
 app.secret_key = config.SECRET_KEY
+app.config['MAIL_SERVER'] = config.SMTP_SERVER
+app.config['MAIL_PORT'] = config.SMTP_PORT
+app.config['MAIL_USERNAME'] = config.SMTP_USERNAME
+app.config['MAIL_PASSWORD'] = config.SMTP_PASSWORD
+app.config['MAIL_USE_TLS'] = True
+
 mysql.init_app(app)
 api = Api(app)
-
+mail = Mail(app)
 jwt = JWTManager(app)
 
 @jwt.unauthorized_loader
@@ -60,11 +69,11 @@ def page_not_found(e):
 	return resp
 
 
-# Given a complex object, this returns the permossion group
+# Given a complex object, this returns the permission group
 # stored in it when get_jwt_identity() is called
 @jwt.user_claims_loader
 def add_claims_to_access_token(user):
-    return user.permissionGroup
+    return {'permission' : user.permissionGroup}
 
 
 # Given a complex object, this returns the user id stored in it
@@ -160,6 +169,10 @@ api.add_resource(LanguageStats, API_ENDPOINT_PREFIX+'languagestats')
 api.add_resource(AllModuleStats, API_ENDPOINT_PREFIX+'allmodulestats')
 api.add_resource(TagCount, API_ENDPOINT_PREFIX+'tagcount')
 api.add_resource(Refresh, API_ENDPOINT_PREFIX+'refresh')
+api.add_resource(TermsPerformance, API_ENDPOINT_PREFIX+'termsperformance')
+api.add_resource(ForgotPassword, API_ENDPOINT_PREFIX+'forgotpassword', resource_class_kwargs={'mail' : mail})
+api.add_resource(ChangePassword, API_ENDPOINT_PREFIX+'changepassword')
+api.add_resource(ForgotUsername, API_ENDPOINT_PREFIX+'forgotusername', resource_class_kwargs={'mail' : mail})
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port='3000', debug=True)

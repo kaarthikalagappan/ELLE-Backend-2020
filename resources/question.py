@@ -452,8 +452,23 @@ class DeleteQuestion(Resource):
             return "User not authorized to delete questions.", 400
 
         if (find_question(int(data['questionID']))):
-            query = "DELETE FROM `question` WHERE `questionID`="+ str(data['questionID'])
-            delete_from_db(query)
+            question_query = f"SELECT * FROM question WHERE questionID = {data['questionID']}"
+            question_data = get_from_db(question_query)
+            print(question_data)
+
+            delete_query = "INSERT INTO deleted_question (questionID, audioID, imageID, type, questionText) VALUES (%s, %s, %s, %s, %s)"
+            post_to_db(delete_query, (question_data[0][0], question_data[0][1], question_data[0][2], question_data[0][3], question_data[0][4]))
+
+            la_query = f"SELECT logID FROM logged_answer WHERE questionID = {question_data[0][0]}"
+            la_results = get_from_db(la_query)
+            print(la_results)
+
+            for log in la_results:
+                log_query = "UPDATE logged_answer SET questionID = %s, deleted_questionID = %s WHERE logID = %s"
+                post_to_db(log_query, (None, question_data[0][0], log[0]))
+
+            # query = "DELETE FROM `question` WHERE `questionID`="+ str(data['questionID'])
+            # delete_from_db(query)
             return {'message':'Successfully deleted question and answer set!'}, 201
 
         return {'message':'No question with that ID exist!'}, 201

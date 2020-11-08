@@ -34,3 +34,14 @@ GAME_PLATFORMS = ['vr', 'mb', 'cp']
 # Enum values listed on database
 HAND_PREFERENCES = ['R', 'L', 'A']
 TERM_GENDERS = ['M', 'F', 'N']
+
+# Redis Configuration
+REDIS_HOST = "localhost"
+REDIS_PORT = 6379
+REDIS_CHARSET = "utf-8"
+
+# SMTP server configuration
+SMTP_SERVER = os.getenv('SMTP_SERVER')
+SMTP_USERNAME = os.getenv('SMTP_USERNAME')
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
+SMTP_PORT = os.getenv('SMTP_PORT')

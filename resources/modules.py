@@ -92,13 +92,19 @@ class Modules(Resource):
         permission, user_id = validate_permissions()
         if not permission or not user_id:
             return "Invalid user", 401
-
-        query = f"""
-                SELECT `module`.*, `group_module`.`groupID` FROM `module` 
-                INNER JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
-                INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
-                WHERE `group_user`.`userID`={user_id}
+        if permission == 'su':
+            query = f"""
+                SELECT DISTINCT `module`.*, `group_module`.`groupID` FROM `module` 
+                LEFT JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
+                LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
                 """
+        else:
+            query = f"""
+                    SELECT DISTINCT `module`.*, `group_module`.`groupID` FROM `module` 
+                    INNER JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
+                    INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
+                    WHERE `group_user`.`userID`={user_id}
+                    """
         result = get_from_db(query)
 
         modules = []
@@ -505,9 +511,26 @@ class Module(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
+            # Get module's data
+            module_query = "SELECT * FROM module WHERE moduleID = %s"
+            module_data = get_from_db(module_query, module_id, conn, cursor)
+
+            # Move to the deleted_module table
+            delete_query = "INSERT INTO deleted_module (moduleID, name, language, complexity, userID) VALUES (%s, %s, %s, %s, %s)"
+            post_to_db(delete_query, (module_data[0][0], module_data[0][1], module_data[0][2], module_data[0][3], module_data[0][4]), conn, cursor)
+
+            # Get all sessions that were associated to the question
+            s_query = "SELECT sessionID FROM session WHERE moduleID = %s"
+            s_results = get_from_db(s_query, module_data[0][0], conn, cursor)
+
+            # Update sessions
+            for session in s_results:
+                session_query = "UPDATE session SET moduleID = %s, deleted_moduleID = %s WHERE sessionID = %s"
+                post_to_db(session_query, (None, module_data[0][0], session[0]), conn, cursor)
+
             # Deleting module
-            query = f"DELETE FROM module WHERE moduleID = {module_id};"
-            post_to_db(query)
+            query = "DELETE FROM module WHERE moduleID = %s"
+            post_to_db(query, module_id, conn, cursor)
 
             raise ReturnSuccess('Successfully deleted module!', 200)
         except CustomException as error:

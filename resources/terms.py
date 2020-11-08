@@ -481,6 +481,24 @@ class Term(Resource):
             deleteAnswersSuccess = Delete_Term_Associations(termID=data['termID'], givenConn=conn, givenCursor=cursor)
             if deleteAnswersSuccess == 0:
                 raise TermsException("Error when trying to delete associated answers", 500)
+
+            # Get term's data
+            term_query = "SELECT * FROM term WHERE termID = %s"
+            term_data = get_from_db(term_query, data['termID'], conn, cursor)
+
+            # Move to the deleted_term table
+            delete_query = "INSERT INTO deleted_term (termID, imageID, audioID, front, back, type, gender, LANGUAGE) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+            post_to_db(delete_query, (term_data[0][0], term_data[0][1], term_data[0][2], term_data[0][3], term_data[0][4], term_data[0][5], term_data[0][6], term_data[0][7]), conn, cursor)
+
+            # Get all logged answers that were associated to the term
+            la_query = "SELECT logID FROM logged_answer WHERE termID = %s"
+            la_results = get_from_db(la_query, term_data[0][0], conn, cursor)
+
+            # Update logged answers
+            for log in la_results:
+                log_query = "UPDATE logged_answer SET termID = %s, deleted_termID = %s WHERE logID = %s"
+                post_to_db(log_query, (None, term_data[0][0], log[0]))
+
             query = "DELETE FROM term WHERE termID = %s"
             delete_from_db(query, str(data['termID']), conn, cursor)
             raise ReturnSuccess("Term " + str(data['termID']) + " successfully deleted", 202)
