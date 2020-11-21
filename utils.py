@@ -7,107 +7,21 @@ import shutil
 import csv
 import subprocess
 import ffmpeg
+import string
+import datetime
+import random
+from flask_restful import reqparse
 from flask_jwt_extended import (
     get_jwt_identity,
     get_jwt_claims
 )
-from config import PERMISSION_LEVELS, PERMISSION_GROUPS, ACCESS_LEVELS
+from config import (IMAGE_EXTENSIONS, AUDIO_EXTENSIONS, TEMP_DELETE_FOLDER,
+                    TEMP_UPLOAD_FOLDER, IMG_UPLOAD_FOLDER, AUD_UPLOAD_FOLDER,
+                    IMG_RETRIEVE_FOLDER, AUD_RETRIEVE_FOLDER,
+                    PERMISSION_LEVELS, PERMISSION_GROUPS, ACCESS_LEVELS)
 
 ########################################################################################
-# DECKS FUNCTIONS
-########################################################################################
-
-def create_csv(data, _id):
-    
-    filename = 'Deck_' + _id + '.csv'
-    with open(filename, mode='w') as csv_file:
-        csv_writer = csv.writer(csv_file)
-
-        headers = ['id', 'English', 'Translation']
-        csv_writer.writerow(headers)
-
-        for item in data:
-            data_row = []
-            data_row.append(item[0])
-            data_row.append(item[3])
-            data_row.append(item[4])#.encode('utf-8').strip())
-            csv_writer.writerow(data_row)
-    try:
-        os.remove(cross_plat_path('zips/Deck_' + _id + '/' + 'Deck_' + _id) + '.csv')
-    except:
-        pass
-    os.rename(filename, cross_plat_path('zips/Deck_' + _id + '/' + 'Deck_' + _id) + '.csv')
-
-def create_zip(data, _id, deck_name):
-    file_name = cross_plat_path('zips/Deck_' +  _id + '.zip')
-
-    # what is the point of this? a double click issue?
-    while(os.path.isdir("./zips/Deck_" + _id) and not os.path.isfile(file_name)):
-        sleep(2)
-
-    if os.path.isfile(file_name):
-        return
-
-    try:
-        os.mkdir(cross_plat_path('zips/Deck_' + _id))
-        os.mkdir(cross_plat_path('zips/Deck_' + _id + '/Audio'))
-        os.mkdir(cross_plat_path('zips/Deck_' + _id + '/Images'))
-        f = open(cross_plat_path('zips/Deck_' + _id + '/Name.txt'), 'w')
-        f.write(deck_name)
-        f.close()
-    except:
-        pass
-
-    create_csv(data, _id)
-
-    # len(audio) == len(images)
-    for item in data:
-        image_name = Path(str(item[8]))#.split('/')[-1])
-        audio_name = Path(str(item[9]))#.split('/')[-1])
-        file_path = cross_plat_path('zips/Deck_' + _id)
-
-        shutil.copy2(cross_plat_path(str(audio_name)), cross_plat_path(file_path + '/Audio/' + audio_name.name))
-        shutil.copy2(cross_plat_path(str(image_name)), cross_plat_path(file_path + '/Images/' + image_name.name))
-
-    try:
-        os.remove(cross_plat_path('zips/Deck_' +  _id) + '.zip')
-    except:
-        pass
-    shutil.make_archive(cross_plat_path('zips/Deck_' +  _id), 'zip', cross_plat_path('zips/Deck_' + _id))
-
-    shutil.rmtree(cross_plat_path('zips/Deck_' + _id))
-
-def get_id_file_name(_id): #, filename):
-    
-    id_length = len(_id)
-
-    if id_length < 4:
-        new_id = _id
-        while(len(new_id) < 4):
-            new_id = '0' + new_id
-
-    return new_id # + filename
-
-def check_decks_db(_id):
-
-    query = "SELECT * FROM deck WHERE deckID=%s"
-    result = get_from_db(query, (_id,))
-
-    for row in result:
-        if row[0] == _id:
-            return True
-    
-    return False
-
-def delete_deck_zip(_id):
-
-    file_name = './zips/Deck_' +  str(_id) + '.zip'
-
-    if(os.path.isfile(file_name)):
-        os.system('rm ' + file_name)
-
-########################################################################################
-# CARDS FUNCTIONS
+# TERM FUNCTIONS
 ########################################################################################
 
 def check_if_term_exists(_id):
@@ -142,6 +56,20 @@ def convert_audio(filename):
         print(str(e))
         return False
 
+def addNewTags(tagList, termID, conn=None, cursor=None):
+    for tag in tagList:
+        #check if a record of these two combinations exist, if not insert
+        query = "SELECT * from tag WHERE termID = %s AND tagName = %s"
+        result = get_from_db(query, (termID, str(tag).lower()), conn, cursor)
+        if result:
+            if DEBUG:
+                print(result)
+                print("Trying to insert a duplicate tag")
+        else:
+            query = "INSERT into tag (termID, tagName) VALUES (%s, %s)"
+            post_to_db(query, (termID, str(tag).lower()), conn, cursor)
+
+
 ########################################################################################
 # GROUPS FUNCTIONS
 ########################################################################################
@@ -160,23 +88,6 @@ def check_groups_db(_id):
 ########################################################################################
 # USERS FUNCTIONS
 ########################################################################################
-
-def transfer_user_decks(_id):
-
-    query = "UPDATE deck SET userID=%s WHERE userID=%s"
-    post_to_db(query, (3000,_id)) # 3000 is our current admin
-
-def put_in_blacklist(_id):
-
-    query = "SELECT lastToken from user where userID = " + str(_id)
-    result = get_from_db(query)
-
-    if result[0][0]:
-        query = "INSERT INTO tokens VALUES (%s)"
-        post_to_db(query, (result[0][0],))
-        query = "UPDATE user set lastToken = %s where userID = " + str(_id)
-        post_to_db(query, (None,))
-
 def getUser(_id):
     #Returns the permission group of the user and whether the user_id is valid or not
     query = "SELECT permissionGroup from user WHERE userID = " + str(_id)
@@ -227,6 +138,111 @@ def is_ta(user_id, group_id):
 
     return False
 
+def find_by_name(username):
+    query = "SELECT * FROM user WHERE username=%s"
+    result = get_from_db(query, (username,))
+
+    for row in result:
+        if row[1].lower() == username:
+            return True, row
+
+    return False, None
+
+def find_by_email(email):
+
+    query = "SELECT user.userID FROM user WHERE email=%s"
+    result = get_from_db(query, email)
+
+    if result and result[0]:
+            return True, result[0][0]
+
+    return False, None
+
+def find_by_token(token):
+
+    query = "SELECT * FROM tokens WHERE expired=%s"
+    result = get_from_db(query, (token,))
+
+    for row in result:
+        if row[0] == token:
+            return False
+
+    return True
+
+def check_user_db(_id):
+
+    query = "SELECT * FROM user WHERE userID=%s"
+    result = get_from_db(query, (_id,))
+
+    for row in result:
+        if row[0] == _id:
+            return True
+
+    return False
+
+#TODO: GOT TO CHANGE THIS LOGIC AS GROUPID ISN'T REQUIRED - JUST THE groupCode
+def check_group_db(id, password):
+    query = "SELECT * FROM `group` WHERE `groupID`=%s"
+    result = get_from_db(query, (id,))
+
+    for row in result:
+        if row[0] == id:
+            if row[2] == password:
+                return True
+    return False
+
+#Convert user_preferences information returned from the database into JSON obj
+def userPreferencesToJSON(data):
+    # Update this as the user_preferences table is updated
+    return {
+        'userPreferenceID' : data[0],
+        'userID' : data[1],
+        'preferredHand' : data[2],
+        'vrGloveColor' : data[3]
+    }
+
+
+def otcGenerator(size=6, chars=string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
+
+def convertUserLevelsToJSON(userLevel):
+    if len(userLevel) < 3:
+        return errorMessage("passed wrong amount of values to convertUserLevelsToJSON")
+    result = {
+        'groupID' : userLevel[0],
+        'groupName' : userLevel[1],
+        'accessLevel' : userLevel[2],
+    }
+    return result
+
+########################################################################################
+# GROUP FUNCTIONS
+########################################################################################
+
+def convertGroupsToJSON(session):
+    if len(session) < 4:
+        return errorMessage("passed wrong amount of values to convertSessionsToJSON, it needs all elements in session table")
+    result = {
+        'groupID' : session[0],
+        'groupName' : session[1],
+        'groupCode' : session[2],
+        'accessLevel' : session[3],
+    }
+    return result
+
+def convertUsersToJSON(session):
+    if len(session) < 3:
+        return errorMessage("passed wrong amount of values to convertSessionsToJSON, it needs all elements in session table")
+    result = {
+        'userID' : session[0],
+        'username' : session[1],
+        'accessLevel' : session[2],
+    }
+    return result
+
+def groupCodeGenerator(size=5, chars=string.ascii_uppercase + string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
+
 ########################################################################################
 # ALL FUNCTIONS
 ########################################################################################
@@ -242,6 +258,12 @@ def check_max_id(result):
 def cross_plat_path(unixpath):
     return str(Path(unixpath).absolute())
 
+def getParameter(parameter_name, what_type, is_required = True, help = "Parameter Error"):
+    parser = reqparse.RequestParser()
+    parser.add_argument(parameter_name, type=what_type, required=is_required, help=help)
+    data = parser.parse_args()
+    return data[parameter_name]
+
 ########################################################################################
 # RETURN MESSAGE FORMATS
 ########################################################################################
@@ -255,3 +277,410 @@ def errorMessage(message, DEBUG = False):
     if DEBUG:
         print(str(message))
     return {'Error' : str(message)}
+
+
+########################################################################################
+# OTHER UTIL FUNCTIONS
+########################################################################################
+
+def getTimeDiffFormatted(time_1 = None, 
+                        time_2 = None, 
+                        str_format = "{days} day {hours}:{minutes}:{seconds}",
+                        time_obj = None):
+    """
+    Returns the time object in a CSV-friendly way.
+
+    If time_1 and time_2 provided, it calculates the time different between two time objects formats them CSV-friendly
+    If time_obj is provided, formats that CSV-friendly
+
+    Keyword arguments:
+    time_1 -- the first time object from which time_2 is subtracted with (time_2 - time_1)
+    time_2 -- the second time object from which time_1 is subtracted from
+    str_format -- the format in which the final string should look like
+    time_obj -- if simply just want to convert a time object (time delta) into a CSV-friendly string, pass it to this argument
+    """
+
+    if time_1 and time_2:
+        time_delta = time_2 - time_1
+    elif time_obj:
+        time_delta = time_obj
+    else:
+        return None, None
+    if time_delta.days != 0:  
+        d = {"days": time_delta.days}
+        d["hours"], rem = divmod(time_delta.seconds, 3600)
+        d["minutes"], d["seconds"] = divmod(rem, 60)
+        if d['days'] != 1 and d['days'] != -1:
+            str_format = "{days} days {hours}:{minutes}:{seconds}"
+        time_spent_str = str_format.format(**d)
+    else:
+        time_spent_str = str(time_delta)[:-3]
+    return time_spent_str, time_delta
+
+
+def dateTimeToMySQL(time_delta):
+    """
+    Takes in a timedelta object and formats it MySQL friendly.
+
+    Keyword arguments:
+    time_delta -- the time object that should be converted to MySQL friendly format
+    """
+
+    str_format = "{hours}:{minutes}:{seconds}"
+    if time_delta.days != 0:
+        d = {}
+        d["hours"], rem = divmod(time_delta.seconds, 3600)
+        d['hours'] = d['hours'] + (time_delta.days*24)
+        d["minutes"], d["seconds"] = divmod(rem, 60)
+        time_spent_str = str_format.format(**d)
+    else:
+        time_spent_str = str(time_delta)[:-3]
+    return time_spent_str
+
+
+def convertSessionsToJSON(session):
+    """
+    Converts the session object into a JSON object and returns the latter.
+
+    A session record has 10 fields. If the passed in object has less than 10 fields, it is assumed to be just a regular
+    session object, and so it is converted into a JSON object those the keys are the respective field names.
+    But if the passed in object's size is greater than 10, it is assumed to have the module name as the 11th object, so appends that.
+
+    Keyword arguments:
+    session -- the session record object (list/array)
+    """
+    
+    if len(session) < 10:
+        return errorMessage("passed wrong amount of values to convertSessionsToJSON, it needs all elements in session table")
+    
+    result = {
+        'sessionID' : session[0],
+        'userID' : session[1],
+        'moduleID' : session[2],
+        'sessionDate' : str(session[3]),
+        'playerScore' : session[4],
+        'startTime' : str(session[5]),
+        'endTime' : str(session[6]),
+        'platform' : session[7],
+        'mode' : session[8]
+    }
+
+    if len(session) >= 11:
+        result['moduleName'] = session[10]
+
+    return result
+
+
+def convertTermToJSON(data):
+    """
+    Convert the given term data record into JSON format.
+    
+    A term record has 8 field. If the passed in object has length of 8, we simply convert it to JSON object and return that.
+    If the passed in object has length more than 8, then the function assume that the last two fields are the image and audio location fields and adds that to the return object.
+    
+    Keyword arguments:
+    data -- the term record object (list/array)
+    """
+
+    if len(data) < 8:
+        return errorMessage("passed wrong amount of values to convertTermToJSON, it needs all elements in terms table")
+    
+    result = {
+        "termID" : data[0],
+        "imageID" : data[1],
+        "audioID" : data[2],
+        "front" : data[3],
+        "back" : data[4],
+        "type" : data[5],
+        "gender" : data[6],
+        "language" : data[7]
+    }
+
+    if len(data) > 8:
+        result["imageLocation"] = IMG_RETRIEVE_FOLDER + data[8] if data[8] else None
+        result["audioLocation"] = AUD_RETRIEVE_FOLDER + data[9] if data[9] else None
+    return result
+
+
+def convertGameLogsToJSON(game_log):
+    if len(game_log) < 6:
+        return errorMessage("passed wrong amount of values to convertSessionsToJSON, it needs all elements in session table")
+    result = {
+        'logID' : game_log[0],
+        'userID' : game_log[1],
+        'moduleID' : game_log[2],
+        'correct' : game_log[3],
+        'incorrect' : game_log[4],
+        'platform' : game_log[5],
+        'time' : game_log[6].__str__(),
+        'gameName' : game_log[7]
+    }
+    return result
+
+
+def getImageLocation(image_id):
+    """
+    Get the image location from given the imageID
+
+    Keyword arguments:
+    image_id -- the ID of the image record
+    """
+
+    # If ID is null
+    if image_id == None:
+        return ''
+    response = {}
+    query = f"SELECT `imageLocation` FROM `image` WHERE `imageID` = {image_id};"
+    result = get_from_db(query)
+    if result and result[0]:
+        return IMG_RETRIEVE_FOLDER + result[0][0]
+    else:
+        return ''
+
+
+def getAudioLocation(audio_id):
+    """
+    Get the audio location from given the audioID
+
+    Keyword arguments:
+    audio_id -- the ID of the audio record
+    """
+
+    # If ID is null
+    if audio_id == None:
+        return ''
+    query = f"SELECT `audioLocation` FROM `audio` WHERE `audioID` = {audio_id};"
+    result = get_from_db(query)
+    if result and result[0]:
+        return AUD_RETRIEVE_FOLDER + result[0][0]
+    else:
+        return ''
+
+
+def attachQuestion(module_id, question_id, conn = None, cursor = None):
+    """
+    Attache or detach a question from the module; returns false if the question was detached
+
+    Keyword arguments:
+    module_id -- the ID of the module record
+    question_id -- the ID of the question record
+    conn -- the connection object, if this record is called under a function that already established a connection to the database
+    cursor -- the cursor object, if already connected to the database
+    """
+
+    query = f"SELECT * FROM `module_question` WHERE `moduleID` = {module_id} AND `questionID` = {question_id}"
+    result = get_from_db(query, None, conn, cursor)
+    # If an empty list is returned, post new link
+    if not result or not result[0]:
+        query = f'''INSERT INTO `module_question` (`moduleID`, `questionID`)
+                VALUES ({module_id}, {question_id})'''
+        post_to_db(query, None, conn, cursor)
+        return True
+    else:
+        # Delete link if it exists
+        query = f'''DELETE FROM `module_question`
+                WHERE `moduleID` = {module_id} AND `questionID` = {question_id}'''
+        post_to_db(query, None, conn, cursor)
+        return False
+
+
+def GetTAList(professorID):
+    """
+    Get the list of TA for the professor's classes
+
+    Keyword arguments:
+    professorID -- the ID of the professor whose TA list should be returned
+    """
+
+    TA_list = []
+    get_ta_query = f"""
+                    SELECT `user`.`userID` FROM `user` 
+                    INNER JOIN `group_user` on `group_user`.`userID` = `user`.`userID` 
+                    AND `group_user`.`groupID` IN 
+                    (SELECT `group_user`.`groupID` from `group_user` WHERE `group_user`.`userID` = {professorID}) 
+                    WHERE `group_user`.`accessLevel` = 'ta'
+                    """
+    ta_results = get_from_db(get_ta_query)
+    if ta_results and ta_results[0]:
+        for ta in ta_results:
+            TA_list.append(ta[0])
+    return TA_list
+
+
+def convertModuleToJSON(module, sixth_param_name='sixthParam'):
+    """
+    Converting a module record into a JSON object
+
+    Keyword arguments:
+    module -- the module record from database (list/array)
+    """
+
+    if len(module) < 4:
+        return errorMessage("Wrong amount of values in the object. Module record has 4 fields, or 5 with groupID")
+    
+    moduleObj = {}
+    moduleObj['moduleID'] = module[0]
+    moduleObj['name'] = module[1]
+    moduleObj['language'] = module[2]
+    moduleObj['complexity'] = module[3]
+    moduleObj['userID'] = module[4]
+
+    if len(module) > 5:
+        moduleObj[sixth_param_name] = module[5]
+    
+    return moduleObj
+
+
+def querySessionsToJSON(query, parameters=None):
+    """
+    The passed in query related to retrieving sessions will be executed and will return a JSON object of the retrieved values.
+
+    Keyword Arguments
+    query -- the query that retrives session information
+    parameters -- any parameters that has to be passed in to the query
+    """
+
+    result = get_from_db(query, parameters)
+    sessions = []
+    
+    for row in result:
+        session = {}
+        session['sessionID'] = row[0]
+        session['userID'] = row[1]
+        session['moduleID'] = row[2]
+        session['sessionDate'] = str(row[3])
+        session['playerScore'] = row[4]
+        session['startTime'] = row[5]
+        session['endTime'] = row[6]
+        session['platform'] = row[7]
+        # Ignoring unfinished sessions
+        if session['endTime'] != None and session['startTime'] != None and session['playerScore'] != None:
+            sessions.append(session)
+        # If an unfinished session, we get the last loggedd answer time associated with the session and update the session end time
+        else:
+            log_time_query = f"SELECT `logged_answer`.`log_time` FROM `logged_answer` WHERE `sessionID`={row[0]} ORDER BY `logID` DESC LIMIT 1"
+            last_log_time = get_from_db(log_time_query)
+            if last_log_time and last_log_time[0] and last_log_time[0][0] != None:
+                if session['sessionDate'] != time.strftime("%Y-%m-%d"):
+                    query_update_time = f"UPDATE `session` SET `session`.`endTime` = '{dateTimeToMySQL(last_log_time[0][0])}' WHERE `session`.`sessionID` = {row[0]}"
+                    post_to_db(query_update_time)
+                    session['endTime'] = last_log_time[0][0]
+                    sessions.append(session)
+                    try:
+                        # Since we changed the sessions data on db, invalidate Redis cache
+                        redis_conn = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, charset=REDIS_CHARSET, decode_responses=True)
+                        redis_conn.delete('sessions_csv')
+                    except redis.exceptions.ConnectionError:
+                        pass
+    return sessions
+
+
+def getAverages(sessions):
+    """
+    Returns the average score and average session length each session record in sessions object
+
+    Keyword arguments
+    sessions -- an array of session records
+    """
+
+    if len(sessions) == 0:
+        return None
+    score_total = 0
+    time_total = 0
+    logged_answer_count = 0
+    for session in sessions:
+        # Accumulating score
+        score_total += session['playerScore']
+        get_log_count = f"""SELECT COUNT(`logged_answer`.`logID`) FROM `logged_answer` 
+                        WHERE `logged_answer`.`sessionID` = {session["sessionID"]}"""
+        logged_answer_count += (get_from_db(get_log_count))[0][0]
+        start_date_time = session['startTime']
+        # Accumulating time
+        end_date_time = session['endTime']
+        elapsedTime = end_date_time - start_date_time
+        time_total += elapsedTime.seconds
+    # Returning statistics object
+    stat = {}
+    stat['averageScore'] = (score_total / logged_answer_count) if logged_answer_count != 0 else 0
+    # Session length in minutes
+    stat['averageSessionLength'] = str(datetime.timedelta(seconds = (time_total)))
+    return stat
+
+
+def DateTimeToString(o):
+    """ This function is to be used for json.dumps()'s default parameter. Converts datetime object into a serializable object """
+
+    if isinstance(o, datetime.datetime):
+        return str(o)
+    elif isinstance(o, datetime.timedelta):
+        return str(o)
+
+
+def convertListToSQL(list):
+    if len(list) <= 0:
+        return "= ''"
+    if len(list) < 2:
+        return "= " + str(list[0])
+    else:
+        return "IN " + str(tuple(list))
+
+
+def find_question(questionID):
+    query = "SELECT * FROM question WHERE questionID=%s"
+    result = get_from_db(query, (questionID,))
+    if int(result[0][0]) == int(questionID): 
+        return True
+    return False
+
+
+def Delete_Term_Associations(term_id, questionID=None, given_conn=None, given_cursor=None):
+    """
+    Checks how many Answer records are associated with this term and deletes those answer records
+
+    Note: This function is called from delete method of Term.
+    And before deleting, it checks if the answer record's questionID is associated with only the term being deleted
+    If so, deletes the question as well
+    """
+
+    try:
+        conn = mysql.connect() if given_conn == None else given_conn
+        cursor = conn.cursor() if given_cursor == None else given_cursor
+
+        deleteAnswerQuery = "DELETE FROM `answer` WHERE `questionID` = %s AND `termID` = %s"
+        deleteQuestionQuery = "DELETE FROM `question` WHERE `questionID` = %s"
+        getAssociatedQuestions = "SELECT * FROM `answer` WHERE `questionID` = %s"
+        query = "SELECT * FROM `answer` WHERE `termID` = %s"
+        answerRecords = get_from_db(query, str(term_id), conn, cursor)
+
+        for answer in answerRecords:
+            if answer:
+                questionInAnswers = get_from_db(getAssociatedQuestions, str(answer[0]), conn, cursor)
+                if questionInAnswers and questionInAnswers[0] and len(questionInAnswers) <= 1:
+                    if questionInAnswers[0][1] != answer[1]:
+                        raise CustomException("Something went wrong in the logic of deleting a term", 500)
+                    delete_from_db(deleteQuestionQuery, str(answer[0]))
+                delete_from_db(deleteAnswerQuery, (str(answer[0]), str(answer[1])), conn, cursor)
+        
+        raise ReturnSuccess("Successfully deleted associated answer records", 200)
+    except CustomException as error:
+        if given_conn == None:
+            conn.rollback()
+        return 0
+    except ReturnSuccess as success:
+        if given_conn == None:
+            conn.commit()
+        return 1
+    except Exception as error:
+        if given_conn == None:
+            conn.rollback()
+        return 0
+    finally:
+        if(given_conn == None and conn.open):
+            cursor.close()
+            conn.close()
+
+
+def allowed_file(filename):
+    return '.' in filename and \
+        filename.rsplit('.', 1)[1].lower() in IMAGE_EXTENSIONS or \
+        filename.rsplit('.', 1)[1].lower() in AUDIO_EXTENSIONS

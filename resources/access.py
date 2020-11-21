@@ -1,51 +1,31 @@
 from flask import request
-from flask_restful import Resource, reqparse
+from flask_restful import Resource
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from werkzeug.utils import secure_filename
-from flaskext.mysql import MySQL
 from db import mysql
 from db_utils import *
 from utils import *
 from datetime import date
 from config import PERMISSION_LEVELS
-
-
-class CustomException(Exception):
-    def __init__(self, msg, returnCode):
-        # Error message is stored formatted in msg and response code stored in returnCode
-        self.msg = errorMessage(msg)
-        self.returnCode = returnCode
-
-
-class ReturnSuccess(Exception):
-    def __init__(self, msg, returnCode):
-        # Message is stored formatted in msg and response code stored in returnCode
-        if isinstance(msg, str):
-            self.msg = returnMessage(msg)
-        else:
-            self.msg = msg
-        self.returnCode = returnCode
+from exceptions_util import *
 
 
 class Access(Resource):
+    """API to change an user's access level"""
+
     @jwt_required
     # Change the access level for the given user 
     def post(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('userID',
-                            required = True,
-                            type = str,
-                            help = """The userID of the user whose access
-                            level you want to change must be passed in""")
-        parser.add_argument('accessLevel',
-                            required = True,
-                            type = str,
-                            help = """Please specify the access level you 
-                            want to change the user to""")
-        parser.add_argument('groupID',
-                            required = False,
-                            type = str,
-                            help = "string containing the groupID")
+        """
+        Change the access level of an user.
+
+        Available levels are 'su', 'pf', and 'st'. In a group, there can be 'st', 'ta', and 'pf' accounts.
+        Professors and superadmins can promote students to TA while only superadmins can promote anyone to a professor status.
+        """
+        
+        data = {}
+        data['userID'] = getParameter("userID", int, True, "Invalid userID format")
+        data['accessLevel'] = getParameter("accessLevel", str, True, "Please specify the access level you want to change the user to")
+        data['groupID'] = getParameter("groupID", int, False, "Invalid groupID format")
 
         permission, user_id = validate_permissions()
         if not permission or not user_id:
@@ -55,7 +35,6 @@ class Access(Resource):
         if (permission != 'su' and permission != 'pf') or not user_id:
             return errorMessage("User is not authorized to do this operation"), 401
 
-        data = parser.parse_args()
         data['accessLevel'] = data['accessLevel'][:2]
 
         if data['accessLevel'] not in PERMISSION_LEVELS:

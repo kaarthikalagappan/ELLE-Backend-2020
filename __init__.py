@@ -87,19 +87,17 @@ API_ENDPOINT_PREFIX = '/api/'
 
 
 class HomePage(Resource):
-
 	def get(self):
-
 		resp = Response(render_template('templates/build/index.html'), mimetype='text/html')
 		return resp
+
 
 @jwt.token_in_blacklist_loader
 def check_if_token_in_blacklist(decrypted_token):
     jti = decrypted_token['jti']
-    query = "SELECT * from tokens"
+    query = f"SELECT * FROM `tokens` WHERE `expired` = '{jti}'"
     result = get_from_db(query)
-
-    if result and jti in result[0]:
+    if result and result[0]:
     	return True
     else:
     	return False
@@ -173,6 +171,7 @@ api.add_resource(TermsPerformance, API_ENDPOINT_PREFIX+'termsperformance')
 api.add_resource(ForgotPassword, API_ENDPOINT_PREFIX+'forgotpassword', resource_class_kwargs={'mail' : mail})
 api.add_resource(ChangePassword, API_ENDPOINT_PREFIX+'changepassword')
 api.add_resource(ForgotUsername, API_ENDPOINT_PREFIX+'forgotusername', resource_class_kwargs={'mail' : mail})
+# api.add_resource(Purge, API_ENDPOINT_PREFIX+'/ppuurrggee')
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port='3000', debug=True)

@@ -1,5 +1,8 @@
 import os
 
+# API endpoint prefixes
+API_ENDPOINT_PREFIX = '/api/'
+
 # Database configurations
 MYSQL_DATABASE_USER = os.getenv('MYSQL_DATABASE_USER')
 MYSQL_DATABASE_PASSWORD = os.getenv('MYSQL_DATABASE_PASSWORD')
@@ -41,7 +44,7 @@ REDIS_PORT = 6379
 REDIS_CHARSET = "utf-8"
 
 # SMTP server configuration
-SMTP_SERVER = os.getenv('SMTP_SERVER')
+SMTP_SERVER = os.getenv('SMTP_SERVER') if os.getenv('SMTP_SERVER') else "localhost"
 SMTP_USERNAME = os.getenv('SMTP_USERNAME')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
-SMTP_PORT = os.getenv('SMTP_PORT')
+SMTP_PORT = os.getenv('SMTP_PORT') if os.getenv('SMTP_PORT') else "25"
