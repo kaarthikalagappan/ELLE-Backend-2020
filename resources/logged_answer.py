@@ -6,49 +6,26 @@ from flaskext.mysql import MySQL
 from db import mysql
 from db_utils import *
 from utils import *
+from exceptions_util import *
 import os
 import datetime
 import redis
 from config import REDIS_HOST, REDIS_PORT, REDIS_CHARSET
 
-
-class CustomException(Exception):
-    pass
-
-class ReturnSuccess(Exception):
-    def __init__(self, msg, returnCode):
-        # Message is stored formatted in msg and response code stored in returnCode
-        if isinstance(msg, str):
-            self.msg = returnMessage(msg)
-        else:
-            self.msg = msg
-        self.returnCode = returnCode
-
 class LoggedAnswer(Resource):
     # Create a logged_answer that stores if the user got the question correct
     @jwt_required
     def post(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('questionID',
-                            required = False,
-                            type = str)
-        parser.add_argument('termID',
-                            required = True,
-                            type = str)
-        parser.add_argument('sessionID',
-                            required = True,
-                            type = str)
-        parser.add_argument('correct',
-                            required = True,
-                            type = str)
-        parser.add_argument('mode',
-                            required = False,
-                            type = str)
-        data = parser.parse_args()
-
+        data = {}
+        data['questionID'] = getParameter("questionID", str, False, "")
+        data['termID'] = getParameter("termID", str, True, "")
+        data['sessionID'] = getParameter("sessionID", str, True, "")
+        data['correct'] = getParameter("correct", str, True, "")
+        data['mode'] = getParameter("mode", str, False, "")
+ 
         permission, user_id = validate_permissions()
         if not permission or not user_id:
-            return "Invalid user", 401
+            return errorMessage("Invalid user"), 401
         
         try:
             conn = mysql.connect()
@@ -70,6 +47,9 @@ class LoggedAnswer(Resource):
                     VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']}, '{formatted_time}')"
                 post_to_db(query, None, conn, cursor)
             raise ReturnSuccess("Successfully created a logged_answer record", 205)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -84,30 +64,23 @@ class LoggedAnswer(Resource):
     # Pull a user's logged_answers based on a given module
     @jwt_required
     def get(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('moduleID',
-                            required = False,
-                            type = str)
-        parser.add_argument('userID',
-                            required = False,
-                            type = str)
-        parser.add_argument('sessionID',
-                            required = False,
-                            type = str)
-        data = parser.parse_args()
+        data = {}
+        data['moduleID'] = getParameter("moduleID", str, False, "")
+        data['userID'] = getParameter("userID", str, False, "")
+        data['sessionID'] = getParameter("sessionID", str, False, "")
 
         permission, user_id = validate_permissions()
         if not permission or not user_id:
-            return "Invalid user", 401
+            return errorMessage("Invalid user"), 401
         
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
 
             if not data['moduleID'] or data['moduleID'] == "":
-                moduleExp = "REGEXP '.*'"
+                module_exp = "REGEXP '.*'"
             else:
-                moduleExp = " = " + str(data['moduleID'])
+                module_exp = " = " + str(data['moduleID'])
             
             if not data['sessionID'] or data['sessionID'] == "":
                 sessionID = "REGEXP '.*'"
@@ -117,26 +90,26 @@ class LoggedAnswer(Resource):
             #TODO: STUDENT USERS CAN ONLY PULL THEIR OWN RECORDS, ONLY ADMINS AND SUPER USERS
             # CAN REQUEST OTHER STUDENTS' OR ALL SESSIONS
             if (not data['userID'] or data['userID'] == "") and (permission == 'pf' or permission == 'su'):
-                userExp = "REGEXP '.*'"
+                user_exp = "REGEXP '.*'"
             elif (permission == 'pf' or permission == 'su'):
-                userExp = " = " + str(data['userID'])
+                user_exp = " = " + str(data['userID'])
             else:
-                userExp = " = " + str(user_id)
+                user_exp = " = " + str(user_id)
             
-            getQuestionsQuery = f"""
+            get_questions_query = f"""
                                 SELECT DISTINCT sessionID FROM session 
-                                WHERE moduleID {moduleExp} AND
-                                userID {userExp} AND sessionID {sessionID}
+                                WHERE moduleID {module_exp} AND
+                                userID {user_exp} AND sessionID {sessionID}
                                 """
-            sessionIDList = get_from_db(getQuestionsQuery, None, conn, cursor)
+            session_id_list = get_from_db(get_questions_query, None, conn, cursor)
 
-            getLoggedAnswerQuery = "SELECT logged_answer.*, term.front FROM logged_answer \
+            get_logged_answer_query = "SELECT logged_answer.*, term.front FROM logged_answer \
                                     INNER JOIN term ON term.termID = logged_answer.termID \
                                     WHERE sessionID = %s"
-            loggedAnswers = []
+            logged_answers = []
 
-            for sessionID in sessionIDList:
-                db_results = get_from_db(getLoggedAnswerQuery, sessionID, conn, cursor)
+            for sessionID in session_id_list:
+                db_results = get_from_db(get_logged_answer_query, sessionID, conn, cursor)
                 for result in db_results:
                     la_record = {
                         'logID' : result[0],
@@ -147,12 +120,15 @@ class LoggedAnswer(Resource):
                         'mode' : result[5],
                         'front' : result[9]
                     }
-                    loggedAnswers.append(la_record)
+                    logged_answers.append(la_record)
 
-            if loggedAnswers:
-                raise ReturnSuccess(loggedAnswers, 200)
+            if logged_answers:
+                raise ReturnSuccess(logged_answers, 200)
             else:
                 raise ReturnSuccess("No associated logged answers found for that module and/or user", 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -165,11 +141,11 @@ class LoggedAnswer(Resource):
                 conn.close()
 
 class GetLoggedAnswerCSV(Resource):
-    # @jwt_required
+    @jwt_required
     def get(self):
-        # permission, user_id = validate_permissions()
-        # if not permission or not user_id or permission != 'su':
-        #     return "Invalid user", 401
+        permission, user_id = validate_permissions()
+        if not permission or not user_id or permission != 'su':
+            return errorMessage("Invalid user"), 401
         
         try:
             redis_conn = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, charset=REDIS_CHARSET, decode_responses=True)
@@ -186,7 +162,6 @@ class GetLoggedAnswerCSV(Resource):
             logged_ans_chks = None
 
         if checksum == logged_ans_chks:
-            print("1")
             csv = redis_conn.get('logged_ans_csv')
         else:
             last_query = "SELECT MAX(logged_answer.logID) FROM logged_answer"
@@ -208,10 +183,9 @@ class GetLoggedAnswerCSV(Resource):
                 rd_log_ans_count = None
 
             if db_count != rd_log_ans_count or rd_log_ans_count is None:
-                print("2")
-                csv = 'Log ID, User ID, Username, Module ID, Module Name, Question ID, Term ID, Session ID, Correct, Log time, Mode\n'
+                csv = 'Log ID, User ID, Username, Module ID, Deleted Module ID, Module Name, Question ID, Deleted Question ID, Term ID, Deleted Term ID, Session ID, Correct, Log time, Mode\n'
                 query = """
-                        SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name FROM logged_answer 
+                        SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name, session.deleted_moduleID FROM logged_answer 
                         INNER JOIN session ON session.sessionID = logged_answer.sessionID
                         INNER JOIN user ON user.userID = session.userID
                         INNER JOIN module on module.moduleID = session.moduleID
@@ -219,12 +193,15 @@ class GetLoggedAnswerCSV(Resource):
                 results = get_from_db(query)
                 if results and results[0]:
                     for record in results:
-                        csv = csv + f"""{record[0]}, {record[7]}, {record[8]}, {record[9]}, {record[10]}, {record[1]}, {record[2]}, {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
+                        if record[11] is None:
+                            replace_query = f"SELECT `name` FROM deleted_module WHERE moduleID = {record[13]}"
+                            replace = get_from_db(replace_query)
+                            record[12] = replace[0][0]
+                        csv = csv + f"""{record[0]}, {record[9]}, {record[10]}, {record[11]}, {record[13]}, {record[12]}, {record[1]}, {record[7]}, {record[2]}, {record[8]} {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
             else:
-                print("3")
                 csv = ""
                 query = f"""
-                        SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name FROM logged_answer 
+                        SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name, session.deleted_moduleID FROM logged_answer 
                         INNER JOIN session ON session.sessionID = logged_answer.sessionID
                         INNER JOIN user ON user.userID = session.userID
                         INNER JOIN module on module.moduleID = session.moduleID
@@ -236,7 +213,11 @@ class GetLoggedAnswerCSV(Resource):
 
                 if results and results[0]:
                     for record in results:
-                        csv = csv + f"""{record[0]}, {record[7]}, {record[8]}, {record[9]}, {record[10]}, {record[1]}, {record[2]}, {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
+                        if record[11] is None:
+                            replace_query = f"SELECT `name` FROM deleted_module WHERE moduleID = {record[13]}"
+                            replace = get_from_db(replace_query)
+                            record[12] = replace[0][0]
+                        csv = csv + f"""{record[0]}, {record[9]}, {record[10]}, {record[11]}, {record[13]}, {record[12]}, {record[1]}, {record[7]}, {record[2]}, {record[8]} {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
 
             last_record_id = results[-1][0]
             
