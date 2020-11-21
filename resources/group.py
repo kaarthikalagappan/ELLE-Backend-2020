@@ -6,73 +6,50 @@ from flaskext.mysql import MySQL
 from db import mysql
 from db_utils import *
 from utils import *
+from exceptions_util import *
 import os
 import string
 import random
-
-class CustomException(Exception):
-    pass
-
-class ReturnSuccess(Exception):
-    def __init__(self, msg, returnCode):
-        # Message is stored formatted in msg and response code stored in returnCode
-        if isinstance(msg, str):
-            self.msg = returnMessage(msg)
-        else:
-            self.msg = msg
-        self.returnCode = returnCode
-
-class GroupException(Exception):
-    def __init__(self, msg, returnCode):
-        # Error message is stored formatted in msg and response code stored in returnCode
-        if isinstance(msg, str):
-            self.msg = errorMessage(msg)
-        else:
-            self.msg = msg
-        self.returnCode = returnCode
 
 class Group(Resource):
     # Add a group to the database
     @jwt_required
     def post(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('groupName',
-                            required = True,
-                            type = str)
-        data = parser.parse_args()
+        data = {}
+        data['groupName'] = getParameter("groupName", str, True, "")
 
         permission, user_id = validate_permissions()
         if not permission or not user_id:
-            return "Invalid user", 401
+            return errorMessage("Invalid user"), 401
 
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
 
             if permission != 'pf':
-                raise GroupException("User cannot create classes.", 400)
+                raise CustomException("User cannot create classes.", 400)
 
             # Checks if the groupName already exists
-            dupe_query = "SELECT `groupID` FROM `group` WHERE `groupName`=%s"
-            dupe_results = get_from_db(dupe_query, data['groupName'], conn, cursor)
+            dupe_query = f"SELECT `groupID` FROM `group` WHERE `groupName`= {data['groupName']}"
+            dupe_results = get_from_db(dupe_query, None, conn, cursor)
 
             if dupe_results:
-                raise GroupException("groupName already exists.", 400)
+                raise CustomException("groupName already exists.", 400)
             else:
                 # Randomly generate 6-long string of numbers and letters
                 # String must be unique for each class
-                group_code = groupCode_generator()
-                gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`=%s"
-                gc_results = get_from_db(gc_query, group_code, conn, cursor)
+                group_code = groupCodeGenerator()
+                gc_query = f"SELECT `groupID` FROM `group` WHERE `groupCode`= {group_code}"
+                gc_results = get_from_db(gc_query, None, conn, cursor)
 
                 if gc_results:
-                    raise GroupException("groupCode already exists", 400)
+                    raise CustomException("groupCode already exists", 400)
 
-                query = "INSERT INTO `group` (`groupName`, `groupCode`) VALUES (%s, %s)"
-                post_to_db(query, (data['groupName'], group_code), conn, cursor)
+                query = f"INSERT INTO `group` (`groupName`, `groupCode`) VALUES ({data['groupName']}, {group_code})"
+                post_to_db(query, None, conn, cursor)
 
-                g_query = "SELECT `groupID` FROM `group` WHERE `groupName`=%s"
-                g_results = get_from_db(g_query, data['groupName'], conn, cursor)
+                g_query = f"SELECT `groupID` FROM `group` WHERE `groupName`= {data['groupName']}"
+                g_results = get_from_db(g_query, None, conn, cursor)
                 group_id = g_results[0][0]
 
                 # Users who creates a class have their accesLevel default to 'pf'
@@ -80,6 +57,9 @@ class Group(Resource):
                 post_to_db(gu_query, (user_id, group_id, 'pf'), conn, cursor)
 
                 raise ReturnSuccess("Successfully created the class.", 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -94,21 +74,14 @@ class Group(Resource):
     # Edit a group
     @jwt_required
     def put(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('groupID',
-                            required = True,
-                            type = int)
-        parser.add_argument('groupName',
-                            required = False,
-                            type = str)
-        parser.add_argument('groupCode',
-                            required = False,
-                            type = str)
-        data = parser.parse_args()
+        data = {}
+        data['groupID'] = getParameter("groupID", str, True, "")
+        data['groupName'] = getParameter("groupName", str, False, "")
+        data['groupCode'] = getParameter("groupCode", str, False, "")
 
         permission, user_id = validate_permissions()
         if not permission or not user_id:
-            return "Invalid user", 401
+            return errorMessage("Invalid user"), 401
 
         if 'groupName' not in data or not data['groupName']:
             data['groupName'] = None
@@ -122,37 +95,40 @@ class Group(Resource):
 
             # Only professors and superadmins can edit groups
             if permission == 'st':
-                raise GroupException("Invalid permissions.", 400)
+                raise CustomException("Invalid permissions.", 400)
         
             # Checking groupName and make sure it is unique
             if data['groupName'] is not None:
-                gn_query = "SELECT `groupID` FROM `group` WHERE `groupName`=%s"
-                gn_results = get_from_db(gn_query, data['groupName'], conn, cursor)
+                gn_query = f"SELECT `groupID` FROM `group` WHERE `groupName`= {data['groupName']}"
+                gn_results = get_from_db(gn_query, None, conn, cursor)
             
                 if gn_results:
-                    raise GroupException("groupName already in use.", 400)
+                    raise CustomException("groupName already in use.", 400)
 
             # Checking groupCode and make sure it is unique
             if data['groupCode'] is not None:
-                gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`=%s"
-                gc_results = get_from_db(gc_query, data['groupCode'], conn, cursor)
+                gc_query = f"SELECT `groupID` FROM `group` WHERE `groupCode`= {data['groupCode']}"
+                gc_results = get_from_db(gc_query, None, conn, cursor)
             
                 if gc_results:
-                    raise GroupException("groupCode already in use.", 400)
+                    raise CustomException("groupCode already in use.", 400)
         
             if data['groupCode'] is not None and data['groupName'] is None:
-                query ="UPDATE `group` SET `groupCode`=%s WHERE `groupID`=%s"
-                results = post_to_db(query, (data['groupCode'], data['groupID']), conn, cursor)
+                query = f"UPDATE `group` SET `groupCode`= {data['groupCode']} WHERE `groupID`= {data['groupID']}"
+                results = post_to_db(query, None, conn, cursor)
             elif data['groupCode'] is None and data['groupName'] is not None:
-                query ="UPDATE `group` SET `groupName`=%s WHERE `groupID`=%s"
-                results = post_to_db(query, (data['groupName'], data['groupID']), conn, cursor)
+                query = f"UPDATE `group` SET `groupName`= {data['groupName']} WHERE `groupID`= {data['groupID']}"
+                results = post_to_db(query, None, conn, cursor)
             elif data['groupCode'] is not None and data['groupName'] is None:
-                query ="UPDATE `group` SET `groupName`=%s, `groupCode`=%s WHERE `groupID`=%s"
-                results = post_to_db(query, (data['groupName'], data['groupCode'], data['groupID']), conn, cursor)
+                query = f"UPDATE `group` SET `groupName`= {data['groupName']}, `groupCode`= {data['groupCode']} WHERE `groupID`= {data['groupID']}"
+                results = post_to_db(query, None, conn, cursor)
             else:
                 raise ReturnSuccess("No values passed in, nothing changed.", 200)
 
             raise ReturnSuccess("Successfully updated group.", 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -167,15 +143,12 @@ class Group(Resource):
     # Delete a group
     @jwt_required
     def delete(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('groupID',
-                            required = True,
-                            type = int)
-        data = parser.parse_args()
+        data = {}
+        data['groupID'] = getParameter("groupID", str, True, "")
 
         permission, user_id = validate_permissions()
         if not permission or not user_id:
-            return "Invalid user", 401
+            return errorMessage("Invalid user"), 401
 
         try:
             conn = mysql.connect()
@@ -183,12 +156,15 @@ class Group(Resource):
 
             # Only professors and superadmins can delete groups
             if permission == 'st':
-                raise GroupException("Invalid permissions.", 400)
+                raise CustomException("Invalid permissions.", 400)
 
-            query = "DELETE FROM `group` WHERE `groupID` = %s"
-            delete_from_db(query, data['groupID'], conn, cursor)
+            query = f"DELETE FROM `group` WHERE `groupID` = {data['groupID']}"
+            delete_from_db(query, None, conn, cursor)
         
             raise ReturnSuccess("Successfully deleted group.", 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -204,25 +180,22 @@ class GroupRegister(Resource):
     # Register for a group
     @jwt_required
     def post(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('groupCode',
-                            required = True,
-                            type = str)
-        data = parser.parse_args()
+        data = {}
+        data['groupCode'] = getParameter("groupCode", str, True, "")
 
         permission, user_id = validate_permissions()
         if not permission or not user_id:
-            return "Invalid user", 401
+            return errorMessage("Invalid user"), 401
 
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
 
             if permission == 'su':
-                return GroupException("Superadmins cannot register for classes."), 400
+                return CustomException("Superadmins cannot register for classes."), 400
 
-            query = "SELECT `groupID` FROM `group` WHERE `groupCode` = %s"
-            results = get_from_db(query, data['groupCode'], conn, cursor)
+            query = f"SELECT `groupID` FROM `group` WHERE `groupCode` = {data['groupCode']}"
+            results = get_from_db(query, None, conn, cursor)
 
             # if groupCode exists in group table
             if results:
@@ -230,18 +203,21 @@ class GroupRegister(Resource):
 
                 # Check if the user has already registered for the group
                 # otherwise continue with registering the user for the group
-                dupe_query = "SELECT `userID` FROM `group_user` WHERE `groupID`=%s AND `userID`=%s"
-                dupe_results = get_from_db(dupe_query, (group_id, user_id), conn, cursor)
+                dupe_query = f"SELECT `userID` FROM `group_user` WHERE `groupID`= {group_id} AND `userID`= {user_id}"
+                dupe_results = get_from_db(dupe_query, None, conn, cursor)
 
                 if dupe_results:
-                    raise GroupException("User has already registered for the class.", 207)
+                    raise CustomException("User has already registered for the class.", 207)
                 else:
-                    gu_query = "INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES (%s, %s, %s)"
-                    post_to_db(gu_query, (user_id, group_id, permission), conn, cursor)
+                    gu_query = f"INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES ({user_id}, {group_id}, {permission})"
+                    post_to_db(gu_query, None, conn, cursor)
             else:
-                raise GroupException("Invalid class code.", 206)
+                raise CustomException("Invalid class code.", 206)
 
             raise ReturnSuccess("Successfully registered for group", 205)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -257,12 +233,9 @@ class SearchUserGroups(Resource):
     # Search for the groups (classes) the user is in
     @jwt_required
     def get(self):
-        parser = reqparse.RequestParser()
-        data = parser.parse_args()
-
         permission, user_id = validate_permissions()
         if not permission or not user_id:
-            return "Invalid user", 401
+            return errorMessage("Invalid user"), 401
 
         try:
             conn = mysql.connect()
@@ -286,18 +259,21 @@ class SearchUserGroups(Resource):
             groups = []
             if results and results[0]:
                 for group in results:
-                    groupObj = convertGroupsToJSON(group)
+                    group_obj = convertGroupsToJSON(group)
 
                     if permission == 'pf' or permission == 'su':
                         group_users = []
-                        group_users_from_db = get_from_db(get_group_users_query, groupObj['groupID'], conn, cursor)
+                        group_users_from_db = get_from_db(get_group_users_query, group_obj['groupID'], conn, cursor)
                         for indv_group_user in group_users_from_db:
                             group_users.append(convertUsersToJSON(indv_group_user))
-                        groupObj['group_users'] = group_users
+                        group_obj['group_users'] = group_users
 
-                    groups.append(groupObj)
+                    groups.append(group_obj)
             
             raise ReturnSuccess(groups, 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -313,13 +289,12 @@ class UsersInGroup(Resource):
     # Get's all the users in a specific group
     @jwt_required
     def get(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('groupID',
-                            required = True,
-                            type = int)
-        data = parser.parse_args()
+        data = {}
+        data['groupID'] = getParameter("groupID", str, True, "")
 
         permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return errorMessage("Invalid user"), 401
 
         try:
             conn = mysql.connect()
@@ -327,7 +302,7 @@ class UsersInGroup(Resource):
 
             # Only superadmins/professors can search for users in a group
             if permission == 'st':
-                raise GroupException("User cannot search for users in a group.", 400)
+                raise CustomException("User cannot search for users in a group.", 400)
 
             query = "SELECT `user`.userID, `user`.username, `group_user`.accessLevel \
                      FROM `group_user` \
@@ -342,6 +317,9 @@ class UsersInGroup(Resource):
                     users.append(convertUsersToJSON(user))
             
             raise ReturnSuccess(users, 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -356,35 +334,37 @@ class UsersInGroup(Resource):
 class GenerateGroupCode(Resource):
     @jwt_required
     def get(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('groupID',
-                            required = True,
-                            type = int)
-        data = parser.parse_args()
+        data = {}
+        data['groupID'] = getParameter('groupID', str, True, "")
 
         permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return errorMessage("Invalid user"), 401
 
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
 
             if permission == 'st':
-                raise GroupException("User cannot generate new group codes.", 400)
+                raise CustomException("User cannot generate new group codes.", 400)
 
-            group_code = groupCode_generator()
+            group_code = groupCodeGenerator()
             while True:
-                gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`=%s"
-                gc_results = get_from_db(gc_query, group_code)
+                gc_query = f"SELECT `groupID` FROM `group` WHERE `groupCode`= '{group_code}'"
+                gc_results = get_from_db(gc_query, None, conn, cursor)
 
                 if gc_results:
-                    group_code = groupCode_generator()
+                    group_code = groupCodeGenerator()
                 else:
                     break
             
-            query = "UPDATE `group` SET `groupCode`=%s WHERE `groupID`=%s"
-            results = post_to_db(query, (group_code, data['groupID']), conn, cursor)
+            query = f"UPDATE `group` SET `groupCode`= '{group_code}' WHERE `groupID`= {data['groupID']}"
+            results = post_to_db(query, None, conn, cursor)
 
             raise ReturnSuccess({"groupCode" : group_code}, 200)
+        except CustomException as error:
+            conn.rollback()
+            return error.msg, error.returnCode
         except ReturnSuccess as success:
             conn.commit()
             return success.msg, success.returnCode
@@ -395,27 +375,3 @@ class GenerateGroupCode(Resource):
             if(conn.open):
                 cursor.close()
                 conn.close()
-
-def convertGroupsToJSON(session):
-    if len(session) < 4:
-        return errorMessage("passed wrong amount of values to convertSessionsToJSON, it needs all elements in session table")
-    result = {
-        'groupID' : session[0],
-        'groupName' : session[1],
-        'groupCode' : session[2],
-        'accessLevel' : session[3],
-    }
-    return result
-
-def convertUsersToJSON(session):
-    if len(session) < 3:
-        return errorMessage("passed wrong amount of values to convertSessionsToJSON, it needs all elements in session table")
-    result = {
-        'userID' : session[0],
-        'username' : session[1],
-        'accessLevel' : session[2],
-    }
-    return result
-
-def groupCode_generator(size=5, chars=string.ascii_uppercase + string.digits):
-    return ''.join(random.choice(chars) for _ in range(size))
