@@ -19,4 +19,10 @@ Note: The documentation is still being updated and some information presented mi
 * SQL keywords in capital letters
 * Backticks around identifiers
 * f-Strings when possible
-* Example: SELECT * FROM `users` WHERE `userID` = 0
+### Functions
+* Use camelCase
+### Variables
+* Use underscore
+### Documentation within code
+* Use docstring as an overall summary of the API call
+* Otherwise use #
