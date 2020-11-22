@@ -5,7 +5,13 @@ This backend uses the Flask web framework and the Flask RESTful extension to mak
 <br />
 
 ### Setup
-The following steps can be used to setup the backend on your local machine or a new server:
+Can run the command `bash setup.sh` to setup the backend faster
+* **User should setup the MYSQL database before running the file and have the credentials at hand**
+* After deploying this this repo, give the user read, write, and execute permissions
+* The user should be able to edit the `/etc/environment` file
+* If needed, run the command `python3 __init__.py` to start the Flask framework in debug mode
+
+Or the following steps can be used to manually setup the backend on your local machine or a new server:
 * Clone this repo
     * `git clone https://github.com/kaarthikalagappan/ELLE-Backend-2020.git`
 * Install all the dependencies listed in the requirements.txt file by running the command `pip install -r requirements.txt` (run in virtual environment if required)
