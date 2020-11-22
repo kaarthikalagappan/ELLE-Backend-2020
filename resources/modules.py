@@ -62,7 +62,7 @@ class RetrieveGroupModules(Resource):
         if not permission or not user_id:
             return errorMessage("Invalid user"), 401
         
-        group_id = getParameter('groupID', int, False, "Please pass in the groupID")
+        group_id = getParameter('groupID', int, True, "Please pass in the groupID")
         if not group_id:
             return errorMessage("Please pass in a groupID"), 400
 
@@ -92,9 +92,8 @@ class SearchModules(Resource):
         if not permission or not user_id:
             return errorMessage("Invalid user"), 401
 
-        parser = reqparse.RequestParser()
-        parser.add_argument('language', type=str, required=True)
-        data = parser.parse_args()
+        data = {}
+        data['language'] = getParameter("language", str, True, "please provide two letter languge code")
 
         query = f"""
                 SELECT `module`.*, `group_module`.`groupID` FROM `module` 
@@ -133,10 +132,11 @@ class RetrieveUserModules(Resource):
         #if a regular student user, return modules associated with their groups (similar to /modules)
         if permission == 'st' and not is_ta(user_id, group_id):
             query = f"""
-                SELECT `module`.*, `group_module`.`groupID` FROM `module` 
+                SELECT `module`.*, GROUP_CONCAT(DISTINCT `group_module`.`groupID`) FROM `module` 
                 INNER JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
                 INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
                 WHERE `group_user`.`userID`={user_id}
+                GROUP BY `module`.`moduleID`
                 """
             result = get_from_db(query)
 
@@ -149,22 +149,35 @@ class RetrieveUserModules(Resource):
 
         if permission == 'su':
             query = f"""
-                    SELECT DISTINCT `module`.*, `group_module`.`groupID` FROM `module` 
+                    SELECT DISTINCT `module`.*, GROUP_CONCAT(DISTINCT `group_module`.`groupID`) FROM `module` 
                     LEFT JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
                     LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID`
+                    GROUP BY `module`.`moduleID`
                     """
         else:
             query = f"""
-                    SELECT DISTINCT `module`.*, `group_module`.`groupID` FROM `module` 
+                    SELECT DISTINCT `module`.*, GROUP_CONCAT(DISTINCT `group_module`.`groupID`) FROM `module` 
                     LEFT JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
                     LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
                     WHERE `group_user`.`userID`={user_id} OR `module`.`userID`={user_id}
+                    GROUP BY `module`.`moduleID`
                     """
         result = get_from_db(query)
 
         modules = []
         for row in result:
-            modules.append(convertModuleToJSON(row, 'groupID'))
+            json_module_obj = convertModuleToJSON(row, 'groupID')
+            if json_module_obj and json_module_obj['groupID']:
+                id_string = json_module_obj['groupID']
+                groupID_list = []
+                numbers = id_string.split(',')
+                try:
+                    for ID in numbers:
+                        groupID_list.append(int(ID))
+                except:
+                    pass
+                json_module_obj['groupID'] = groupID_list
+            modules.append(json_module_obj)
 
         TA_list = []
         if permission == 'pf':
@@ -322,7 +335,7 @@ class Module(Resource):
             return errorMessage("Invalid user"), 401
 
         if not group_id and permission != 'su':
-            return {'message':'Please provide the id of a group'}, 400
+            return errorMessage('Please provide the id of a group'), 400
 
         if permission == 'st' and not is_ta(user_id, group_id):
             return errorMessage("User not authorized to do this"), 401
@@ -490,7 +503,8 @@ class Module(Resource):
 
             # Move to the deleted_module table
             delete_query = f"""INSERT INTO `deleted_module` (`moduleID`, `name`, `language`, `complexity`, `userID`) 
-                            VALUES ({module_data[0][0]}, {module_data[0][1]}, {module_data[0][2]}, {module_data[0][3]}, {module_data[0][4]})"""
+                            VALUES ({module_data[0][0]}, '{module_data[0][1]}', '{"NULL" if not module_data[0][2] else module_data[0][2]}', 
+                            {"NULL" if not module_data[0][3] else module_data[0][3]}, {module_data[0][4]})"""
             post_to_db(delete_query, None, conn, cursor)
 
             # Get all sessions that were associated to the question
@@ -499,11 +513,12 @@ class Module(Resource):
 
             # Update sessions
             for session in s_results:
-                session_query = f"UPDATE `session` SET `moduleID` = {None}, `deleted_moduleID` = {module_data[0][0]} WHERE `sessionID` = {session[0]}"
+                session_query = f'UPDATE `session` SET `moduleID` = NULL, `deleted_moduleID` = {module_data[0][0]} WHERE `sessionID` = {session[0]}'
                 post_to_db(session_query, None, conn, cursor)
 
             # Deleting module
             query = f"DELETE FROM `module` WHERE `moduleID` = {module_id}"
+            print(query)
             post_to_db(query, None, conn, cursor)
 
             raise ReturnSuccess('Successfully deleted module!', 200)
@@ -537,12 +552,8 @@ class AttachQuestion(Resource):
             return errorMessage("User not authorized to do this"), 401
         
         # Parsing JSON
-        parser = reqparse.RequestParser()
-        parser.add_argument('moduleID', type=int, required=True)
-        parser.add_argument('questionID', type=int, required=False)
-        data = parser.parse_args()
-        module_id = data['moduleID']
-        question_id = data['questionID']
+        module_id = getParameter("moduleID", int, True, "moduleID in integer format is required")
+        question_id = getParameter("questionID", int, True)
 
         try:
             conn = mysql.connect()
@@ -588,22 +599,19 @@ class AttachTerm(Resource):
         if permission == 'st' and not is_ta(user_id, group_id):
             return errorMessage("User not authorized to do this"), 401
 
-        # Parsing JSON
-        parser = reqparse.RequestParser()
-        parser.add_argument('moduleID', type=int, required=True)
-        parser.add_argument('termID', type=int, required=True)
-        data = parser.parse_args()
-        module_id = data['moduleID']
-        term_id = data['termID']
+        data = {}
+        module_id = getParameter("moduleID", int, True)
+        term_id = getParameter("termID", int, True)
 
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
             # Finding associated MATCH question with term
             query = f'''
-                    SELECT question.* FROM question, answer
-                    WHERE question.questionID = answer.questionID
-                    AND answer.termID = {term_id}
+                    SELECT `question`.* FROM `question`, `answer`
+                    WHERE `question`.`questionID` = `answer`.`questionID`
+                    AND `answer`.`termID` = {term_id}
+                    AND `question`.`type` = "MATCH"
                     '''
             result = get_from_db(query)
             # If term or match question does not exist
@@ -611,7 +619,7 @@ class AttachTerm(Resource):
             if not result or not result[0]:
                 # Determining if term exists
                 result = get_from_db(f"SELECT front FROM term WHERE termID = {term_id}")
-                if result:
+                if result and result[0]:
                     front = result[0]
                     # Creating a new MATCH question if missing (Only occurs for terms manually created through SQL)
                     post_to_db(f''' INSERT INTO question (`type`, `questionText`) VALUES ("MATCH", "What is the translation of {front}?")''')
@@ -652,10 +660,9 @@ class AddModuleGroup(Resource):
 
     @jwt_required
     def post(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument('moduleID', type=int, required=True)
-        parser.add_argument('groupID', type=int, required=True)
-        data = parser.parse_args()
+        data = {}
+        data['moduleID'] = getParameter("moduleID", int, True)
+        data['groupID'] = getParameter("groupID", int, True)
 
         permission, user_id = validate_permissions()
         if not permission or not user_id:
