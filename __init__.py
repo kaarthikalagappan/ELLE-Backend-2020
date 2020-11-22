@@ -29,7 +29,6 @@ from resources.stats import (ModuleReport, ModuleStats, PlatformStats,
 from resources.access import Access
 from resources.group import (Group, GroupRegister, SearchUserGroups, 
 							 UsersInGroup, GenerateGroupCode)
-from resources.testing import Testing, JWTTest
 from resources.game_logs import GameLog
 from resources.logged_answer import LoggedAnswer, GetLoggedAnswerCSV
 import os.path
@@ -107,8 +106,6 @@ def check_if_token_in_blacklist(decrypted_token):
 def index():
 	return app.send_static_file('index.html')
 
-api.add_resource(Testing, API_ENDPOINT_PREFIX+'newTest')
-api.add_resource(JWTTest, API_ENDPOINT_PREFIX+'jwttest')
 api.add_resource(UserRegister, API_ENDPOINT_PREFIX+'register')
 api.add_resource(Users, API_ENDPOINT_PREFIX+'users')
 api.add_resource(UserLogin, API_ENDPOINT_PREFIX+'login')

@@ -26,7 +26,7 @@ from config import (IMAGE_EXTENSIONS, AUDIO_EXTENSIONS, TEMP_DELETE_FOLDER,
 
 def check_if_term_exists(_id):
 
-    query = "SELECT * FROM term WHERE termID=%s"
+    query = "SELECT * FROM term WHERE termID = %s"
     result = get_from_db(query, str(_id,))
     for row in result:
         if str(row[0]) == str(_id):
@@ -76,7 +76,7 @@ def addNewTags(tagList, termID, conn=None, cursor=None):
 
 def check_groups_db(_id):
 
-    query = "SELECT * FROM grouptb WHERE groupID=%s"
+    query = "SELECT * FROM grouptb WHERE groupID = %s"
     result = get_from_db(query, (_id,))
 
     for row in result:
@@ -90,8 +90,8 @@ def check_groups_db(_id):
 ########################################################################################
 def getUser(_id):
     #Returns the permission group of the user and whether the user_id is valid or not
-    query = "SELECT permissionGroup from user WHERE userID = " + str(_id)
-    permission = get_from_db(query)
+    query = "SELECT permissionGroup from user WHERE userID = %s"
+    permission = get_from_db(query, str(_id))
 
     if not permission:
         return None, False
@@ -124,12 +124,8 @@ def is_ta(user_id, group_id):
     if not user_id or not group_id:
         return False
     
-    query = f"""
-            SELECT accessLevel from group_user 
-            WHERE userID = {user_id} AND
-            groupID = {group_id}
-            """
-    accessLevel = get_from_db(query)
+    query = "SELECT accessLevel from group_user WHERE userID = %s AND groupID = %s"
+    accessLevel = get_from_db(query, (user_id, group_id))
     if accessLevel and accessLevel[0]:
         if accessLevel[0][0] != 'ta':
             return False
@@ -139,7 +135,7 @@ def is_ta(user_id, group_id):
     return False
 
 def find_by_name(username):
-    query = "SELECT * FROM user WHERE username=%s"
+    query = "SELECT * FROM user WHERE username = %s"
     result = get_from_db(query, (username,))
 
     for row in result:
@@ -150,7 +146,7 @@ def find_by_name(username):
 
 def find_by_email(email):
 
-    query = "SELECT user.userID FROM user WHERE email=%s"
+    query = "SELECT user.userID FROM user WHERE email = %s"
     result = get_from_db(query, email)
 
     if result and result[0]:
@@ -160,7 +156,7 @@ def find_by_email(email):
 
 def find_by_token(token):
 
-    query = "SELECT * FROM tokens WHERE expired=%s"
+    query = "SELECT * FROM tokens WHERE expired = %s"
     result = get_from_db(query, (token,))
 
     for row in result:
@@ -171,7 +167,7 @@ def find_by_token(token):
 
 def check_user_db(_id):
 
-    query = "SELECT * FROM user WHERE userID=%s"
+    query = "SELECT * FROM user WHERE userID = %s"
     result = get_from_db(query, (_id,))
 
     for row in result:
@@ -182,7 +178,7 @@ def check_user_db(_id):
 
 #TODO: GOT TO CHANGE THIS LOGIC AS GROUPID ISN'T REQUIRED - JUST THE groupCode
 def check_group_db(id, password):
-    query = "SELECT * FROM `group` WHERE `groupID`=%s"
+    query = "SELECT * FROM `group` WHERE `groupID` = %s"
     result = get_from_db(query, (id,))
 
     for row in result:
@@ -430,8 +426,8 @@ def getImageLocation(image_id):
     if image_id == None:
         return ''
     response = {}
-    query = f"SELECT `imageLocation` FROM `image` WHERE `imageID` = {image_id};"
-    result = get_from_db(query)
+    query = "SELECT `imageLocation` FROM `image` WHERE `imageID` = %s"
+    result = get_from_db(query, image_id)
     if result and result[0]:
         return IMG_RETRIEVE_FOLDER + result[0][0]
     else:
@@ -449,8 +445,8 @@ def getAudioLocation(audio_id):
     # If ID is null
     if audio_id == None:
         return ''
-    query = f"SELECT `audioLocation` FROM `audio` WHERE `audioID` = {audio_id};"
-    result = get_from_db(query)
+    query = "SELECT `audioLocation` FROM `audio` WHERE `audioID` = %s"
+    result = get_from_db(query, audio_id)
     if result and result[0]:
         return AUD_RETRIEVE_FOLDER + result[0][0]
     else:
@@ -468,19 +464,17 @@ def attachQuestion(module_id, question_id, conn = None, cursor = None):
     cursor -- the cursor object, if already connected to the database
     """
 
-    query = f"SELECT * FROM `module_question` WHERE `moduleID` = {module_id} AND `questionID` = {question_id}"
-    result = get_from_db(query, None, conn, cursor)
+    query = "SELECT * FROM `module_question` WHERE `moduleID` = %s AND `questionID` = %s"
+    result = get_from_db(query, (module_id, question_id), conn, cursor)
     # If an empty list is returned, post new link
     if not result or not result[0]:
-        query = f'''INSERT INTO `module_question` (`moduleID`, `questionID`)
-                VALUES ({module_id}, {question_id})'''
-        post_to_db(query, None, conn, cursor)
+        query = "INSERT INTO `module_question` (`moduleID`, `questionID`) VALUES (%s, %s)"
+        post_to_db(query, (module_id, question_id), conn, cursor)
         return True
     else:
         # Delete link if it exists
-        query = f'''DELETE FROM `module_question`
-                WHERE `moduleID` = {module_id} AND `questionID` = {question_id}'''
-        post_to_db(query, None, conn, cursor)
+        query = "DELETE FROM `module_question` WHERE `moduleID` = %s AND `questionID` = %s"
+        post_to_db(query, (module_id, question_id), conn, cursor)
         return False
 
 
@@ -493,14 +487,12 @@ def GetTAList(professorID):
     """
 
     TA_list = []
-    get_ta_query = f"""
-                    SELECT `user`.`userID` FROM `user` 
-                    INNER JOIN `group_user` on `group_user`.`userID` = `user`.`userID` 
-                    AND `group_user`.`groupID` IN 
-                    (SELECT `group_user`.`groupID` from `group_user` WHERE `group_user`.`userID` = {professorID}) 
-                    WHERE `group_user`.`accessLevel` = 'ta'
-                    """
-    ta_results = get_from_db(get_ta_query)
+    get_ta_query = "SELECT `user`.`userID` FROM `user` \
+                    INNER JOIN `group_user` on `group_user`.`userID` = `user`.`userID` \
+                    AND `group_user`.`groupID` IN \
+                    (SELECT `group_user`.`groupID` from `group_user` WHERE `group_user`.`userID` = %s) \
+                    WHERE `group_user`.`accessLevel` = 'ta'"
+    ta_results = get_from_db(get_ta_query, professorID)
     if ta_results and ta_results[0]:
         for ta in ta_results:
             TA_list.append(ta[0])
@@ -558,12 +550,12 @@ def querySessionsToJSON(query, parameters=None):
             sessions.append(session)
         # If an unfinished session, we get the last loggedd answer time associated with the session and update the session end time
         else:
-            log_time_query = f"SELECT `logged_answer`.`log_time` FROM `logged_answer` WHERE `sessionID`={row[0]} ORDER BY `logID` DESC LIMIT 1"
-            last_log_time = get_from_db(log_time_query)
+            log_time_query = "SELECT `logged_answer`.`log_time` FROM `logged_answer` WHERE `sessionID`= %s ORDER BY `logID` DESC LIMIT 1"
+            last_log_time = get_from_db(log_time_query, row[0])
             if last_log_time and last_log_time[0] and last_log_time[0][0] != None:
                 if session['sessionDate'] != time.strftime("%Y-%m-%d"):
-                    query_update_time = f"UPDATE `session` SET `session`.`endTime` = '{dateTimeToMySQL(last_log_time[0][0])}' WHERE `session`.`sessionID` = {row[0]}"
-                    post_to_db(query_update_time)
+                    query_update_time = "UPDATE `session` SET `session`.`endTime` = %s WHERE `session`.`sessionID` = %s"
+                    post_to_db(query_update_time, (dateTimeToMySQL(last_log_time[0][0]), row[0]))
                     session['endTime'] = last_log_time[0][0]
                     sessions.append(session)
                     try:
@@ -591,9 +583,8 @@ def getAverages(sessions):
     for session in sessions:
         # Accumulating score
         score_total += session['playerScore']
-        get_log_count = f"""SELECT COUNT(`logged_answer`.`logID`) FROM `logged_answer` 
-                        WHERE `logged_answer`.`sessionID` = {session["sessionID"]}"""
-        logged_answer_count += (get_from_db(get_log_count))[0][0]
+        get_log_count = "SELECT COUNT(`logged_answer`.`logID`) FROM `logged_answer` WHERE `logged_answer`.`sessionID` = %s"
+        logged_answer_count += (get_from_db(get_log_count, session['sessionID']))[0][0]
         start_date_time = session['startTime']
         # Accumulating time
         end_date_time = session['endTime']
@@ -626,7 +617,7 @@ def convertListToSQL(list):
 
 
 def find_question(questionID):
-    query = "SELECT * FROM question WHERE questionID=%s"
+    query = "SELECT * FROM question WHERE questionID = %s"
     result = get_from_db(query, (questionID,))
     if int(result[0][0]) == int(questionID): 
         return True

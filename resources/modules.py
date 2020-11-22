@@ -28,19 +28,20 @@ class Modules(Resource):
             return errorMessage("Invalid user"), 401
         
         if permission == 'su':
-            query = f"""
+            query = """
                 SELECT DISTINCT `module`.* FROM `module` 
                 LEFT JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
                 LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
                 """
+            result = get_from_db(query)
         else:
-            query = f"""
+            query = """
                     SELECT DISTINCT `module`.* FROM `module` 
                     INNER JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
                     INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
-                    WHERE `group_user`.`userID`={user_id}
+                    WHERE `group_user`.`userID`=%s
                     """
-        result = get_from_db(query)
+            result = get_from_db(query, user_id)
 
         modules = []
         for row in result:
@@ -66,12 +67,12 @@ class RetrieveGroupModules(Resource):
         if not group_id:
             return errorMessage("Please pass in a groupID"), 400
 
-        query = f"""
+        query = """
                 SELECT `module`.* FROM `module` INNER JOIN `group_module` 
                 ON `group_module`.`moduleID` = `module`.`moduleID` 
-                WHERE `group_module`.`groupID`={group_id}
+                WHERE `group_module`.`groupID`=%s
                 """
-        records = get_from_db(query)
+        records = get_from_db(query, group_id)
         modules = []
         for row in records:
             modules.append(convertModuleToJSON(row)) 
@@ -95,12 +96,12 @@ class SearchModules(Resource):
         data = {}
         data['language'] = getParameter("language", str, True, "please provide two letter languge code")
 
-        query = f"""
+        query = """
                 SELECT `module`.*, `group_module`.`groupID` FROM `module` 
                 INNER JOIN `group_module` ON `group_module`.`moduleID` = `module`.`moduleID` 
-                WHERE `module`.`language`='{data['language']}'
+                WHERE `module`.`language`=%s
                 """
-        records = get_from_db(query)
+        records = get_from_db(query, data['language'])
         modules = []
         for row in records:
             modules.append(convertModuleToJSON(row, 'groupID')) 
@@ -131,14 +132,14 @@ class RetrieveUserModules(Resource):
 
         #if a regular student user, return modules associated with their groups (similar to /modules)
         if permission == 'st' and not is_ta(user_id, group_id):
-            query = f"""
-                SELECT `module`.*, GROUP_CONCAT(DISTINCT `group_module`.`groupID`) FROM `module` 
-                INNER JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
-                INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
-                WHERE `group_user`.`userID`={user_id}
-                GROUP BY `module`.`moduleID`
-                """
-            result = get_from_db(query)
+            query = """
+                    SELECT `module`.*, GROUP_CONCAT(DISTINCT `group_module`.`groupID`) FROM `module` 
+                    INNER JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
+                    INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
+                    WHERE `group_user`.`userID`=%s
+                    GROUP BY `module`.`moduleID`
+                    """
+            result = get_from_db(query, user_id)
 
             modules = []
             for row in result:
@@ -148,21 +149,22 @@ class RetrieveUserModules(Resource):
             return modules
 
         if permission == 'su':
-            query = f"""
+            query = """
                     SELECT DISTINCT `module`.*, GROUP_CONCAT(DISTINCT `group_module`.`groupID`) FROM `module` 
                     LEFT JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
                     LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID`
                     GROUP BY `module`.`moduleID`
                     """
+            result = get_from_db(query)
         else:
-            query = f"""
+            query = """
                     SELECT DISTINCT `module`.*, GROUP_CONCAT(DISTINCT `group_module`.`groupID`) FROM `module` 
                     LEFT JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
                     LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
-                    WHERE `group_user`.`userID`={user_id} OR `module`.`userID`={user_id}
+                    WHERE `group_user`.`userID`=%s OR `module`.`userID`=%s
                     GROUP BY `module`.`moduleID`
                     """
-        result = get_from_db(query)
+            result = get_from_db(query, (user_id, user_id))
 
         modules = []
         for row in result:
@@ -244,12 +246,12 @@ class ModuleQuestions(Resource):
         if not module_id:
             return {'message' : 'Please provide the id of a module.'}
         # Acquiring list of module questions
-        query = f'''
+        query = '''
                 SELECT `question`.* FROM `question`, `module_question`
-                WHERE `module_question`.`moduleID` = {module_id}
+                WHERE `module_question`.`moduleID` = %s
                 AND `module_question`.`questionID` = `question`.`questionID`;
                 '''
-        result = get_from_db(query)
+        result = get_from_db(query, module_id)
         # Attaching variable names to rows
         questions = []
         for row in result:
@@ -264,12 +266,12 @@ class ModuleQuestions(Resource):
         for question in questions:
             question_id = question['questionID']
             # Acquiring answers
-            query = f'''
+            query = '''
                     SELECT `term`.* FROM `term`, `answer`
-                    WHERE `answer`.`questionID` = {question_id}
+                    WHERE `answer`.`questionID` = %s
                     AND `answer`.`termID` = `term`.`termID`;
                     '''
-            result = get_from_db(query)
+            result = get_from_db(query, question_id)
             question['answers'] = []
             # Attaching variable names to terms
             for row in result:
@@ -303,13 +305,13 @@ class Module(Resource):
             return {'message':'Please provide the id of a module'}, 400
         
         # Get all decks associated with the group
-        query = f'''
+        query = '''
                 SELECT `module`.*, `group_module`.`groupID` FROM `module` 
                 INNER JOIN `group_module` ON `group_module`.`moduleID` = `module`.`moduleID` 
                 INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
-                WHERE `group_user`.`userID` = {user_id} AND `module`.`moduleID`={module_id}
+                WHERE `group_user`.`userID` = %s AND `module`.`moduleID`= %s
                 '''
-        result = get_from_db(query)
+        result = get_from_db(query, (user_id, module_id))
 
         module = None
 
@@ -360,11 +362,11 @@ class Module(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
             # Posting to database
-            query = f"""
+            query = """
                     INSERT INTO module (name, language, complexity, userID)
-                    VALUES ('{name}', '{language}', {complexity}, {user_id});
+                    VALUES (%s, %s, %s, %s);
                     """
-            post_to_db(query)
+            post_to_db(query, (name, language, complexity, user_id))
 
             query = "SELECT MAX(moduleID) from module"
             moduleID = get_from_db(query) #ADD A CHECK TO SEE IF IT RETURNED SUCCESSFULLY
@@ -374,9 +376,9 @@ class Module(Resource):
 
             if group_id:
                 # Linking the newly created module to the group associated with the groupID            
-                query = f"""INSERT INTO `group_module` (`moduleID`, `groupID`) 
-                        VALUES ('{moduleID[0][0]}', '{group_id}')"""
-                post_to_db(query)
+                query = """INSERT INTO `group_module` (`moduleID`, `groupID`) 
+                        VALUES (%s, %s)"""
+                post_to_db(query, (moduleID[0][0], group_id))
 
             raise ReturnSuccess({"moduleID" : moduleID[0][0]}, 200)
         except CustomException as error:
@@ -427,15 +429,15 @@ class Module(Resource):
             complexity = data['complexity']
             
             # Updating table
-            query = f"""
+            query = """
                     UPDATE `module`
-                    SET `name` = '{name}', `language` = '{language}', `complexity` = '{complexity}'
-                    WHERE `moduleID` = {module_id};
+                    SET `name` = %s, `language` = %s, `complexity` = %s
+                    WHERE `moduleID` = %s;
                     """
-            post_to_db(query)
+            post_to_db(query, (name, language, complexity, module_id))
 
-            query = f"SELECT * FROM `module` WHERE `moduleID`={data['moduleID']}"
-            results = get_from_db(query)
+            query = "SELECT * FROM `module` WHERE `moduleID` = %s"
+            results = get_from_db(query, data['moduleID'])
             if not results or not results[0]:
                 raise CustomException("Non existant module", 400)
 
@@ -482,8 +484,8 @@ class Module(Resource):
         if not module_id:
             return errorMessage('Please provide the id of a module.'), 400
         
-        query = f"SELECT `module`.`userID` FROM `module` WHERE `module`.`moduleID` = {module_id}"
-        module_user_id = get_from_db(query)
+        query = "SELECT `module`.`userID` FROM `module` WHERE `module`.`moduleID` = %s"
+        module_user_id = get_from_db(query, module_id)
         if not module_user_id or not module_user_id[0]:
             return errorMessage('Invalid module ID'), 400
         
@@ -498,27 +500,25 @@ class Module(Resource):
             cursor = conn.cursor()
 
             # Get module's data
-            module_query = f"SELECT * FROM `module` WHERE `moduleID` = {module_id}"
-            module_data = get_from_db(module_query, None, conn, cursor)
+            module_query = "SELECT * FROM `module` WHERE `moduleID` = %s"
+            module_data = get_from_db(module_query, module_id, conn, cursor)
 
             # Move to the deleted_module table
-            delete_query = f"""INSERT INTO `deleted_module` (`moduleID`, `name`, `language`, `complexity`, `userID`) 
-                            VALUES ({module_data[0][0]}, '{module_data[0][1]}', '{"NULL" if not module_data[0][2] else module_data[0][2]}', 
-                            {"NULL" if not module_data[0][3] else module_data[0][3]}, {module_data[0][4]})"""
-            post_to_db(delete_query, None, conn, cursor)
+            delete_query = """INSERT INTO `deleted_module` (`moduleID`, `name`, `language`, `complexity`, `userID`) 
+                           VALUES (%s, %s, %s, %s, %s)"""
+            post_to_db(delete_query, (module_data[0][0], module_data[0][1], module_data[0][2], module_data[0][3], module_data[0][4]), conn, cursor)
 
             # Get all sessions that were associated to the question
-            s_query = f"SELECT `sessionID` FROM `session` WHERE `moduleID` = {module_data[0][0]}"
-            s_results = get_from_db(s_query, None, conn, cursor)
+            s_query = "SELECT `sessionID` FROM `session` WHERE `moduleID` = %s"
+            s_results = get_from_db(s_query, module_data[0][0], conn, cursor)
 
             # Update sessions
             for session in s_results:
-                session_query = f'UPDATE `session` SET `moduleID` = NULL, `deleted_moduleID` = {module_data[0][0]} WHERE `sessionID` = {session[0]}'
-                post_to_db(session_query, None, conn, cursor)
+                session_query = 'UPDATE `session` SET `moduleID` = NULL, `deleted_moduleID` = %s WHERE `sessionID` = %s'
+                post_to_db(session_query, (module_data[0][0], session[0]), conn, cursor)
 
             # Deleting module
             query = f"DELETE FROM `module` WHERE `moduleID` = {module_id}"
-            print(query)
             post_to_db(query, None, conn, cursor)
 
             raise ReturnSuccess('Successfully deleted module!', 200)
@@ -607,26 +607,26 @@ class AttachTerm(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
             # Finding associated MATCH question with term
-            query = f'''
+            query = '''
                     SELECT `question`.* FROM `question`, `answer`
                     WHERE `question`.`questionID` = `answer`.`questionID`
-                    AND `answer`.`termID` = {term_id}
+                    AND `answer`.`termID` = %s
                     AND `question`.`type` = "MATCH"
                     '''
-            result = get_from_db(query)
+            result = get_from_db(query, term_id)
             # If term or match question does not exist
             question_id = -1
             if not result or not result[0]:
                 # Determining if term exists
-                result = get_from_db(f"SELECT front FROM term WHERE termID = {term_id}")
+                result = get_from_db("SELECT front FROM term WHERE termID = %s", term_id)
                 if result and result[0]:
                     front = result[0]
                     # Creating a new MATCH question if missing (Only occurs for terms manually created through SQL)
-                    post_to_db(f''' INSERT INTO question (`type`, `questionText`) VALUES ("MATCH", "What is the translation of {front}?")''')
+                    post_to_db(''' INSERT INTO question (`type`, `questionText`) VALUES ("MATCH", "What is the translation of %s?")''', front)
                     query = "SELECT MAX(questionID) FROM question"
                     id_result = get_from_db(query)
                     question_id = check_max_id(id_result) - 1
-                    post_to_db(f"INSERT INTO answer (`questionID`, `termID`) VALUES ({question_id}, {term_id})")
+                    post_to_db("INSERT INTO answer (`questionID`, `termID`) VALUES (%s, %s)", (question_id, term_id))
                 else:
                     raise CustomException('Term does not exist or MATCH question has been deleted internally.', 400)
             # Getting question id if question already existed
@@ -676,28 +676,28 @@ class AddModuleGroup(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            query = f"""
-                    SELECT 1 FROM `group_module` WHERE moduleID = {data['moduleID']}
-                    AND groupID = {data['groupID']}
+            query = """
+                    SELECT 1 FROM `group_module` WHERE moduleID = %s
+                    AND groupID = %s
                     """
-            exisistingRecord = get_from_db(query, None, conn, cursor)
+            exisistingRecord = get_from_db(query, (data['moduleID'], data['groupID']), conn, cursor)
 
             # They module is already in the group, so unlink them
             if exisistingRecord and exisistingRecord[0]:
-                deleteQuery = f"""
-                              DELETE from `group_module` WHERE moduleID = {data['moduleID']}
-                              AND groupID = {data['groupID']}
+                deleteQuery = """
+                              DELETE from `group_module` WHERE moduleID = %s
+                              AND groupID = %s
                               """
-                post_to_db(deleteQuery, None, conn, cursor)
+                post_to_db(deleteQuery, (data['moduleID'], data['groupID']), conn, cursor)
                 raise ReturnSuccess("Successfully unlinked them", 200)
             
             # They aren't already linked so link them
             else:
-                insertQuery = f"""
+                insertQuery = """
                               INSERT INTO `group_module` (`moduleID`, `groupID`)
-                              VALUES ({data['moduleID']}, {data['groupID']})	
+                              VALUES (%s, %s)	
                               """
-                post_to_db(insertQuery, None, conn, cursor)
+                post_to_db(insertQuery, (data['moduleID'], data['groupID']), conn, cursor)
                 raise ReturnSuccess("Successfully added module to group", 200)
             
             raise CustomException("Something went wrong when trying to un/link the module to the group", 500)

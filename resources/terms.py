@@ -40,11 +40,11 @@ class Term(Resource):
         language = data['language'].lower()
         #if there is no search term provided, return all the terms
         if 'search_term' not in data or not data['search_term']:
-            query = f"""SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
+            query = """SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
                     LEFT JOIN `image` ON `image`.`imageID` = `term`.`imageID` 
                     LEFT JOIN `audio` ON `audio`.`audioID` = `term`.`audioID` 
-                    WHERE `language` = '{language}'"""
-            results = get_from_db(query)
+                    WHERE `language` = %s"""
+            results = get_from_db(query, language)
             if results and results[0]:
                 for term in results:
                     matching_terms.append(convertTermToJSON(term))
@@ -52,23 +52,23 @@ class Term(Resource):
 
         #search through different fields in term table that [partially] matches the given search term
         search_string = str(data['search_term']).lower()
-        query = f"""SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
+        query = """SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
                 LEFT JOIN `image` ON `image`.`imageID` = `term`.`imageID` 
                 LEFT JOIN `audio` ON `audio`.`audioID` = `term`.`audioID` 
-                WHERE `language` = '{language}' and (`front` LIKE '{search_string+"%"}' OR 
-                `back` LIKE '{search_string+"%"}' OR `type` LIKE '{search_string[:2]}' OR `gender` LIKE '{search_string[:1]}')"""
-        results = get_from_db(query)
+                WHERE `language` = %s and (`front` LIKE %s OR 
+                `back` LIKE %s OR `type` LIKE %s OR `gender` LIKE %s)"""
+        results = get_from_db(query, (language, search_string+"%", search_string+"%", search_string[:2], search_string[:1]))
         if results and results[0]:
             for term in results:
                 matching_terms.append(convertTermToJSON(term))
 
         #searching through tags that [partially] matches the given search term
-        query = f"""SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
+        query = """SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
                 LEFT JOIN `image` ON `image`.`imageID` = `term`.`imageID` 
                 LEFT JOIN `audio` ON `audio`.`audioID` = `term`.`audioID` 
                 INNER JOIN `tag` AS `ta` ON `term`.`termID` = `ta`.`termID` 
-                WHERE `language` = '{language}' and `ta`.`tagName` LIKE '{search_string+"%"}'"""
-        results = get_from_db(query)
+                WHERE `language` = %s and `ta`.`tagName` LIKE %s"""
+        results = get_from_db(query, (language, search_string+"%"))
         if results and results[0]:
             for term in results:
                 jsonObject = convertTermToJSON(term)
@@ -155,15 +155,15 @@ class Term(Resource):
                     #saving the image to a temporary folder
                     file.save(cross_plat_path(TEMP_UPLOAD_FOLDER + fullFileName))
 
-                    query = f"""INSERT INTO `image` (`imageLocation`) VALUES ('{fullFileName}')"""
-                    post_to_db(query, None, conn, cursor)
+                    query = """INSERT INTO `image` (`imageLocation`) VALUES (%s)"""
+                    post_to_db(query, fullFileName, conn, cursor)
 
                     #moving the image to the Images folder upon successfully creating a record
                     os.rename(cross_plat_path(TEMP_UPLOAD_FOLDER + fullFileName), cross_plat_path(IMG_UPLOAD_FOLDER + fullFileName))
 
                     #get the inserted image's imageID
-                    query = f"""SELECT `imageID` FROM `image` WHERE `imageLocation` = '{fullFileName}'"""
-                    imageID = get_from_db(query, None, conn, cursor)
+                    query = """SELECT `imageID` FROM `image` WHERE `imageLocation` = %s"""
+                    imageID = get_from_db(query, fullFileName, conn, cursor)
                     data['imageID'] = imageID[0][0]
                 else:
                     raise CustomException("File format of " + filename + extension + " is not supported. \
@@ -184,15 +184,15 @@ class Term(Resource):
                     #saving the audio to a temporary folder
                     file.save(cross_plat_path(TEMP_UPLOAD_FOLDER + fullFileName))
 
-                    query = f"""INSERT INTO `audio` (`audioLocation`) VALUES ('{fullFileName}')"""
-                    post_to_db(query, None, conn, cursor)
+                    query = """INSERT INTO `audio` (`audioLocation`) VALUES (%s)"""
+                    post_to_db(query, fullFileName, conn, cursor)
 
                     #moving the audio to the Audio folder upon successfully creating a record
                     os.rename(cross_plat_path(TEMP_UPLOAD_FOLDER + fullFileName), cross_plat_path(AUD_UPLOAD_FOLDER + fullFileName))
 
                     #get the inserted audio's audioID
-                    query = f"""SELECT `audioID` FROM `audio` WHERE `audioLocation` = '{fullFileName}'"""
-                    audioID = get_from_db(query, None, conn, cursor)
+                    query = """SELECT `audioID` FROM `audio` WHERE `audioLocation` = %s"""
+                    audioID = get_from_db(query, fullFileName, conn, cursor)
                     data['audioID'] = audioID[0][0]
                 else:
                     raise CustomException("File format of " + str(filename) + str(extension) + " is not supported. \
@@ -200,8 +200,8 @@ class Term(Resource):
 
             # Updating an exsting term
             if data['termID']:
-                query = f"""SELECT `front` FROM `term` WHERE `termID` = {data['termID']}"""
-                result = get_from_db(query, None, conn, cursor)
+                query = """SELECT `front` FROM `term` WHERE `termID` = %s"""
+                result = get_from_db(query, data['termID'], conn, cursor)
                 if not result:
                     raise CustomException("Not an existing term to edit,\
                                         DEVELOPER: please don't pass in id if creating new term", 404)
@@ -211,51 +211,51 @@ class Term(Resource):
                 post_to_db(query, (data['front'], data['back'], data['type'], data['gender'], data['language'], str(data['termID'])), conn, cursor)
 
                 #if they pass in an image or audio, we will replace the existing image or audio (if present) with the new ones
-                query = f"SELECT `imageID` FROM `term` WHERE `termID` = {data['termID']}"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT `imageID` FROM `term` WHERE `termID` = %s"
+                result = get_from_db(query, data['termID'], conn, cursor)
                 if data['imageID']:
                     if result and result[0][0]:
                         #If the term already has an image, delete the image and copy on server and replace it
-                        query = f"SELECT `imageLocation` FROM `image` WHERE `imageID` = {result[0][0]}"
-                        imageLocation = get_from_db(query, None, conn, cursor)
+                        query = "SELECT `imageLocation` FROM `image` WHERE `imageID` = %s"
+                        imageLocation = get_from_db(query, result[0][0], conn, cursor)
                         if not imageLocation or not imageLocation[0][0]:
                             raise CustomException("something went wrong when trying to retrieve image location", 500)
 
                         imageFileName = imageLocation[0][0]
   
-                        query = f"DELETE FROM `image` WHERE `imageID` = {result[0][0]}"
-                        delete_from_db(query, None, conn, cursor)
+                        query = "DELETE FROM `image` WHERE `imageID` = %s"
+                        delete_from_db(query, result[0][0], conn, cursor)
 
                         #removing the existing image
                         os.remove(str(cross_plat_path(IMG_UPLOAD_FOLDER + str(imageFileName))))
 
-                    query = f"""UPDATE `term` SET `imageID` = {data['imageID']} 
-                            WHERE `termID` = {data['termID']}"""
-                    post_to_db(query, None, conn, cursor)
+                    query = """UPDATE `term` SET `imageID` = %s 
+                            WHERE `termID` = %s"""
+                    post_to_db(query, (data['imageID'], data['termID']), conn, cursor)
                 
-                query = f"SELECT `audioID` FROM `term` WHERE `termID` = {data['termID']}"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT `audioID` FROM `term` WHERE `termID` = %s"
+                result = get_from_db(query, data['termID'], conn, cursor)
                 if data['audioID']:
                     if result and result[0][0]:
                         #If the term already has an audio, delete the audio and copy on server and replace it
-                        query = f"SELECT `audioLocation` FROM `audio` WHERE `audioID` = {result[0][0]}"
-                        audioLocation = get_from_db(query, None, conn, cursor)
+                        query = "SELECT `audioLocation` FROM `audio` WHERE `audioID` = %s"
+                        audioLocation = get_from_db(query, result[0][0], conn, cursor)
                         if not audioLocation or not audioLocation[0][0]:
                             raise CustomException("something went wrong when trying to retrieve audio location", 500)
                         audioFileName = audioLocation[0][0]
 
-                        query = f"DELETE FROM `audio` WHERE `audioID` = {result[0][0]}"
-                        delete_from_db(query, None, conn, cursor)
+                        query = "DELETE FROM `audio` WHERE `audioID` = %s"
+                        delete_from_db(query, result[0][0], conn, cursor)
 
                         #removing existing audio
                         os.remove(cross_plat_path(AUD_UPLOAD_FOLDER + str(audioFileName)))
 
-                    query = f"UPDATE `term` SET `audioID` = '{data['audioID']}' WHERE `termID` = {str(data['termID'])}"
-                    post_to_db(query, None, conn, cursor)
+                    query = "UPDATE `term` SET `audioID` = %s WHERE `termID` = %s"
+                    post_to_db(query, (data['audioID'], data['termID']), conn, cursor)
 
                 #add new tags or remove tags if they were removed
-                query = f"SELECT `tagName` FROM `tag` WHERE `termID` = {data['termID']}"
-                attached_tags = get_from_db(query, None, conn, cursor)
+                query = "SELECT `tagName` FROM `tag` WHERE `termID` = %s"
+                attached_tags = get_from_db(query, data['termID'], conn, cursor)
 
                 #There are no tags already attached with the term, so we add all the given ones
                 if not attached_tags and data['tag'] and data['tag']:  #'is not None' redundant?
@@ -263,8 +263,8 @@ class Term(Resource):
 
                 #The user has removed existing tags without any replacements, so we delete them all
                 elif not data['tag'] and attached_tags and attached_tags:
-                    query = f"DELETE FROM `tag` WHERE `termID` = {data['termID']}"
-                    delete_from_db(query, None, conn, cursor)
+                    query = "DELETE FROM `tag` WHERE `termID` = %s"
+                    delete_from_db(query, data['termID'], conn, cursor)
 
                 #The user is updating the existing tags, so we delete what was removed and add new tags
                 elif data['tag'] and attached_tags:
@@ -276,9 +276,9 @@ class Term(Resource):
                         for indiv_tag in different_tags:
                             if indiv_tag in existing_tags and indiv_tag not in data['tag']:
                                 #if the tag is not in the given list of tags, the user removed it so delete it
-                                query = f"""DELETE FROM `tag` WHERE `termID` = {data['termID']} 
-                                        AND `tagName` = {str(indiv_tag)}"""
-                                delete_from_db(query, None, conn, cursor)
+                                query = """DELETE FROM `tag` WHERE `termID` = %s 
+                                        AND `tagName` = %s"""
+                                delete_from_db(query, (data['termID'], indiv_tag), conn, cursor)
                             elif indiv_tag in data['tag'] and indiv_tag not in existing_tags:
                                 #if the tag is only in the given list, then the user added it, so we add it
                                 addNewTags([indiv_tag], str(data['termID']), conn, cursor)
@@ -300,9 +300,9 @@ class Term(Resource):
                 #create a default question
                 typeQuestion = 'PHRASE' if data['type'] and (data['type'] == 'PH' or data['type'] == 'PHRASE') else 'MATCH'
                 questionText = "Match: " + data['front'] + "?"
-                questionQuery = f"""INSERT INTO `question` (`type`, `questionText`) 
-                                VALUES ('{typeQuestion}', '{questionText}')"""
-                post_to_db(questionQuery, None, conn, cursor)
+                questionQuery = """INSERT INTO `question` (`type`, `questionText`) 
+                                VALUES (%s, %s)"""
+                post_to_db(questionQuery, (typeQuestion, questionText), conn, cursor)
 
                 #get the added question's ID
                 maxQuestionQuery = "SELECT MAX(`questionID`) FROM `question`"
@@ -310,14 +310,14 @@ class Term(Resource):
                 questionMaxID = result[0][0] if result and result[0] else 1
 
                 #link the term to the default question
-                insertAnswerQuery = f"""INSERT INTO `answer` (`questionID`, `termID`) 
-                                    VALUES ({int(questionMaxID)}, {int(maxID)})"""
-                post_to_db(insertAnswerQuery, None, conn, cursor)
+                insertAnswerQuery = """INSERT INTO `answer` (`questionID`, `termID`) 
+                                    VALUES (%s, %s)"""
+                post_to_db(insertAnswerQuery, (questionMaxID, maxID), conn, cursor)
 
                 #link the question to the module
-                insertModuleQuery = f"""INSERT INTO `module_question` (`moduleID`, `questionID`) 
-                                    VALUES ({data['moduleID']}, {str(questionMaxID)})"""
-                post_to_db(insertModuleQuery, None, conn, cursor)
+                insertModuleQuery = """INSERT INTO `module_question` (`moduleID`, `questionID`) 
+                                    VALUES (%s, %s)"""
+                post_to_db(insertModuleQuery, (data['moduleID'], questionMaxID), conn, cursor)
 
                 raise ReturnSuccess({"Message" : "Successfully created a term", "termID" : int(maxID)}, 201)
         except CustomException as error:
@@ -367,33 +367,33 @@ class Term(Resource):
                 raise CustomException("cannot delete non-existing term", 403)
 
             #get the imageID and audioID, if they exist, in order to delete them as well
-            query = f"SELECT `imageID`, `audioID` FROM `term` WHERE `termID` = {str(data['termID'])}"
-            results = get_from_db(query, None, conn, cursor)
+            query = "SELECT `imageID`, `audioID` FROM `term` WHERE `termID` = %s"
+            results = get_from_db(query, data['termID'], conn, cursor)
             imageLocation = [[]]
             audioLocation = [[]]
             if results and results[0]:
                 imageID = results[0][0]
                 audioID = results[0][1]
                 if imageID:
-                    query = f"SELECT `imageLocation` FROM `image` WHERE `imageID` = {str(imageID)}"
-                    imageLocation = get_from_db(query, None, conn, cursor)
+                    query = "SELECT `imageLocation` FROM `image` WHERE `imageID` = %s"
+                    imageLocation = get_from_db(query, imageID, conn, cursor)
                     os.rename(cross_plat_path(IMG_UPLOAD_FOLDER + str(imageLocation[0][0])), cross_plat_path(TEMP_DELETE_FOLDER + str(imageLocation[0][0])))
-                    query = f"DELETE FROM `image` WHERE `imageID` = {str(imageID)}"
-                    delete_from_db(query, None, conn, cursor)
+                    query = "DELETE FROM `image` WHERE `imageID` = %s"
+                    delete_from_db(query, imageID, conn, cursor)
                 if audioID:
-                    query = f"SELECT `audioLocation` FROM `audio` WHERE `audioID` = {str(audioID)}"
-                    audioLocation = get_from_db(query, None, conn, cursor)
+                    query = "SELECT `audioLocation` FROM `audio` WHERE `audioID` = %s"
+                    audioLocation = get_from_db(query, audioID, conn, cursor)
                     os.rename(cross_plat_path(AUD_UPLOAD_FOLDER + str(audioLocation[0][0])), cross_plat_path(TEMP_DELETE_FOLDER + str(audioLocation[0][0])))
-                    query = f"DELETE FROM `audio` WHERE `audioID` = {str(audioID)}"
-                    delete_from_db(query, None, conn, cursor)
+                    query = "DELETE FROM `audio` WHERE `audioID` = %s"
+                    delete_from_db(query, audioID, conn, cursor)
 
             deleteAnswersSuccess = Delete_Term_Associations(term_id=data['termID'], given_conn=conn, given_cursor=cursor)
             if deleteAnswersSuccess == 0:
                 raise CustomException("Error when trying to delete associated answers", 500)
 
             # Get term's data
-            term_query = f"SELECT * FROM `term` WHERE `termID` = {data['termID']}"
-            term_data = get_from_db(term_query, None, conn, cursor)
+            term_query = "SELECT * FROM `term` WHERE `termID` = %s"
+            term_data = get_from_db(term_query, data['termID'], conn, cursor)
 
             # Move to the deleted_term table
             delete_query = """INSERT INTO `deleted_term` (`termID`, `imageID`, `audioID`, `front`, `back`, `type`, `gender`, `LANGUAGE`) 
@@ -401,17 +401,17 @@ class Term(Resource):
             post_to_db(delete_query, (term_data[0][0], term_data[0][1], term_data[0][2], term_data[0][3], term_data[0][4], term_data[0][5], term_data[0][6], term_data[0][7]), conn, cursor)
 
             # Get all logged answers that were associated to the term
-            la_query = f"SELECT `logID` FROM `logged_answer` WHERE `termID` = {term_data[0][0]}"
-            la_results = get_from_db(la_query, None, conn, cursor)
+            la_query = "SELECT `logID` FROM `logged_answer` WHERE `termID` = %s"
+            la_results = get_from_db(la_query, term_data[0][0], conn, cursor)
 
             # Update logged answers
             for log in la_results:
-                log_query = f"""UPDATE `logged_answer` SET `termID` = {None}, 
-                            `deleted_termID` = {term_data[0][0]} WHERE `logID` = {log[0]}"""
-                post_to_db(log_query, None, conn, cursor)
+                log_query = """UPDATE `logged_answer` SET `termID` = %s, 
+                            `deleted_termID` = %s WHERE `logID` = %s"""
+                post_to_db(log_query, (None, term_data[0][0], log[0]), conn, cursor)
 
-            query = f"DELETE FROM `term` WHERE `termID` = {str(data['termID'])}"
-            delete_from_db(query, None, conn, cursor)
+            query = "DELETE FROM `term` WHERE `termID` = %s"
+            delete_from_db(query, data['termID'], conn, cursor)
 
             raise ReturnSuccess("Term " + str(data['termID']) + " successfully deleted", 202)
         except ReturnSuccess as success:
@@ -499,12 +499,12 @@ class Tag_Term(Resource):
             if not tag_name or tag_name == '':
                 raise CustomException("Please provide a tag name", 406)
 
-            query = f'''SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
+            query = """SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
                     LEFT JOIN `image` ON `image`.`imageID` = `term`.`imageID` 
                     LEFT JOIN `audio` ON `audio`.`audioID` = `term`.`audioID` 
                     INNER JOIN `tag` ON `tag`.`termID` = `term`.`termID` 
-                    WHERE `tag`.`tagName`="{tag_name.lower()}"'''
-            terms_from_db = get_from_db(query, None, conn, cursor)
+                    WHERE `tag`.`tagName`=%s"""
+            terms_from_db = get_from_db(query, tag_name.lower(), conn, cursor)
             matching_terms = []
             for term in terms_from_db:
                 jsonObject = convertTermToJSON(term)
@@ -548,11 +548,11 @@ class Specific_Term(Resource):
             if not termID or termID == '':
                 raise CustomException("Please provide a termID", 406)
 
-            query = f"""SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
+            query = """SELECT `term`.*, `image`.`imageLocation`, `audio`.`audioLocation` FROM `term` 
                     LEFT JOIN `image` ON `image`.`imageID` = `term`.`imageID` 
                     LEFT JOIN `audio` ON `audio`.`audioID` = `term`.`audioID` 
-                    WHERE `term`.`termID` = {str(termID)}"""
-            term_from_db = get_from_db(query, None, conn, cursor)
+                    WHERE `term`.`termID` = %s"""
+            term_from_db = get_from_db(query, termID, conn, cursor)
 
             term = []
             if term_from_db and term_from_db[0]:        
@@ -596,8 +596,8 @@ class Tags_In_Term(Resource):
             if not termID or termID == '':
                 raise CustomException("Please provide a termID", 406)
 
-            query = f"SELECT `tagName` FROM `tag` WHERE `termID` = {str(termID)}"
-            tags_from_db = get_from_db(query, None, conn, cursor)
+            query = "SELECT `tagName` FROM `tag` WHERE `termID` = %s"
+            tags_from_db = get_from_db(query, termID, conn, cursor)
             tags_list = []
             for tag in tags_from_db:
                 if tag not in tags_list and tag[0]:
@@ -657,7 +657,7 @@ def Delete_Term_Associations(term_id, questionID=None, given_conn=None, given_cu
         deleteQuestionQuery = "DELETE FROM `question` WHERE `questionID` = %s"
         getAssociatedQuestions = "SELECT * FROM `answer` WHERE `questionID` = %s"
         query = "SELECT * FROM `answer` WHERE `termID` = %s"
-        answerRecords = get_from_db(query, str(term_id), conn, cursor)
+        answerRecords = get_from_db(query, term_id, conn, cursor)
 
         for answer in answerRecords:
             if answer:

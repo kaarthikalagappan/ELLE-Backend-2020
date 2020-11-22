@@ -53,16 +53,14 @@ class Session(Resource):
             formatted_time = datetime.datetime.now().time().strftime('%H:%M')
 
             if mode:
-                query = f"INSERT INTO `session` (`userID`, `moduleID`, `sessionDate`, `startTime`, `mode`, `platform`) \
-                    VALUES ({user_id},{moduleID},'{formatted_date}','{formatted_time}','{mode}', \
-                    '{platform[:3]}')"
-                post_to_db(query, None, conn, cursor)
+                query = """INSERT INTO `session` (`userID`, `moduleID`, `sessionDate`, `startTime`, `mode`, `platform`)
+                        VALUES (%s, %s, %s, %s, %s, %s)"""
+                post_to_db(query, (user_id, moduleID, formatted_date, formatted_time, mode, platform[:3]), conn, cursor)
                 sessionID = cursor.lastrowid
             else:
-                query = f"INSERT INTO `session` (`userID`, `moduleID`, `sessionDate`, `startTime`, `platform`) \
-                    VALUES ({user_id},{moduleID},'{formatted_date}','{formatted_time}', \
-                    '{platform[:3]}')"
-                post_to_db(query, None, conn, cursor)
+                query = """INSERT INTO `session` (`userID`, `moduleID`, `sessionDate`, `startTime`, `platform`) 
+                        VALUES (%s, %s, %s, %s, %s)"""
+                post_to_db(query, (user_id, moduleID, formatted_date, formatted_time, platform[:3]), conn, cursor)
                 sessionID = cursor.lastrowid
             raise ReturnSuccess({'sessionID' : sessionID}, 201)
         except ReturnSuccess as success:
@@ -93,10 +91,10 @@ class Session(Resource):
             cursor = conn.cursor()
             sessionData = {"session" : [], "logged_answers" : []}
 
-            query = f"""SELECT `session`.*, `module`.`name` FROM `session` 
+            query = """SELECT `session`.*, `module`.`name` FROM `session` 
                     INNER JOIN `module` ON `module`.`moduleID` = `session`.`moduleID` WHERE
-                    `session`.`sessionID` = {sessionID}"""
-            results = get_from_db(query, None, conn, cursor)
+                    `session`.`sessionID` = %s"""
+            results = get_from_db(query, sessionID, conn, cursor)
             if results and results[0]:
                 sessionData['session'].append(convertSessionsToJSON(results[0]))
                 if permission == 'st' and sessionData['session']['userID'] != user_id:
@@ -104,8 +102,8 @@ class Session(Resource):
             else:
                 raise CustomException("No sessions found for the given ID", 400)
 
-            query = f"SELECT * FROM `logged_answer` WHERE `sessionID` = {sessionID}"
-            results = get_from_db(query, None, conn, cursor)
+            query = "SELECT * FROM `logged_answer` WHERE `sessionID` = %s"
+            results = get_from_db(query, sessionID, conn, cursor)
             if results and results[0]:
                 for log in results:
                     record = {
@@ -159,15 +157,15 @@ class End_Session(Resource):
 
             formatted_time = datetime.datetime.now().time().strftime('%H:%M')
 
-            query = f"SELECT * FROM `session` WHERE `sessionID` = {sessionID}"
-            result = get_from_db(query, None, conn, cursor)
+            query = "SELECT * FROM `session` WHERE `sessionID` = %s"
+            result = get_from_db(query, sessionID, conn, cursor)
             if not result or not result[0]:
                 raise CustomException("Session not found for provided ID", 400)
             elif result[0][6]:
                     raise CustomException("Wrong session ID provided", 400)
 
-            query = f"UPDATE `session` SET `endTime` = '{formatted_time}', `playerScore` = '{playerScore}' WHERE `session`.`sessionID` = {sessionID}"
-            post_to_db(query, None, conn, cursor)
+            query = "UPDATE `session` SET `endTime` = %s, `playerScore` = %s WHERE `session`.`sessionID` = %s"
+            post_to_db(query, (formatted_time, playerScore, sessionID), conn, cursor)
             raise ReturnSuccess("Session successfully ended", 200)
         except ReturnSuccess as success:
             conn.commit()
@@ -223,6 +221,8 @@ class SearchSessions(Resource):
             if not data['userName'] or data['userName'] == '':
                 data['userName'] = "REGEXP '.*'"
             else:
+                data['userName'] = data['userName'].split("'")
+                data['userName'] = data['userName'][0]
                 data['userName'] = "= '" + str(data['userName']) + "'"
             
             # Students (and TAs) cannot pull another user's session data
@@ -236,11 +236,15 @@ class SearchSessions(Resource):
             if not data['platform'] or data['platform'] == '':
                 data['platform'] = "REGEXP '.*'"
             else:
+                data['platform'] = data['platform'].split("'")
+                data['platform'] = data['platform'][0]
                 data['platform'] = "= '" + str(data['platform']) + "'"
 
             if not data['sessionDate'] or data['sessionDate'] == '':
                 data['sessionDate'] = "REGEXP '.*'"
             else:
+                data['sessionDate'] = data['sessionDate'].split("'")
+                data['sessionDate'] = data['sessionDate'][0]
                 data['sessionDate'] = "= '" + str(data['sessionDate']) + "'"
 
             query = f"""SELECT `session`.*, `module`.`name` from `session`
@@ -251,7 +255,7 @@ class SearchSessions(Resource):
                     AND `session`.`userID` {data['userID']} 
                     AND `session`.`platform` {data['platform']}
                     AND `session`.`sessionDate` {data['sessionDate']}"""
-            # print(query)
+
             results = get_from_db(query, None, conn, cursor)
             records = []
             if results and results[0]:
@@ -292,8 +296,8 @@ class GetAllSessions(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            query = f"""SELECT `session`.*, `module`.`name` FROM `session` 
-                    INNER JOIN `module` ON `module`.`moduleID` = session.moduleID"""
+            query = """SELECT `session`.*, `module`.`name` FROM `session` 
+                    INNER JOIN `module` ON `module`.`moduleID` = `session`.`moduleID`"""
             results = get_from_db(query, None, conn, cursor)
             records = []
             if results and results[0]:
@@ -402,8 +406,8 @@ class GetSessionCSV(Resource):
                     if record[6]:
                         time_spent, _ = getTimeDiffFormatted(record[5], record[6])
                     else:
-                        log_time_query = f"SELECT `logged_answer`.`log_time` FROM `logged_answer` WHERE `sessionID`={record[0]} ORDER BY `logID` DESC LIMIT 1"
-                        last_log_time = get_from_db(log_time_query)
+                        log_time_query = "SELECT `logged_answer`.`log_time` FROM `logged_answer` WHERE `sessionID`=%s ORDER BY `logID` DESC LIMIT 1"
+                        last_log_time = get_from_db(log_time_query, record[0])
                         if last_log_time and last_log_time[0] and last_log_time[0][0] != None:
                             time_spent, _ = getTimeDiffFormatted(record[5], last_log_time[0][0])
                             record[6], _ = getTimeDiffFormatted(time_obj = last_log_time[0][0])
@@ -413,26 +417,26 @@ class GetSessionCSV(Resource):
                         else:
                             time_spent = None
                     if not record[4]:
-                        get_logged_answer_score = f"""
-                                                SELECT `logged_answer`.`correct`
-                                                FROM `logged_answer`
-                                                WHERE `logged_answer`.`sessionID` = {record[0]}
-                                                """
-                        answer_data = get_from_db(get_logged_answer_score)
+                        get_logged_answer_score = """
+                                                  SELECT `logged_answer`.`correct`
+                                                  FROM `logged_answer`
+                                                  WHERE `logged_answer`.`sessionID` = %s
+                                                  """
+                        answer_data = get_from_db(get_logged_answer_score, record[0])
                         if answer_data and answer_data[0]:
                             correct_answers = 0
                             for answer_record in answer_data:
                                 correct_answers = correct_answers + answer_record[0]
-                            update_score_query = f"""
-                                                UPDATE `session` SET `session`.`playerScore` = {correct_answers}
-                                                WHERE `session`.`sessionID` = {record[0]}
-                                                """
-                            post_to_db(update_score_query)
+                            update_score_query = """
+                                                 UPDATE `session` SET `session`.`playerScore` = %s
+                                                 WHERE `session`.`sessionID` = %s
+                                                 """
+                            post_to_db(update_score_query, (correct_answers, record[0]))
                             record[4] = correct_answers
                     platform = "Mobile" if record[7] == 'mb' else "PC" if record[7] == 'cp' else "Virtual Reality"
                     if record[2] is None:
-                        replace_query = f"SELECT `name` FROM `deleted_module` WHERE `moduleID` = {record[9]}"
-                        replace = get_from_db(replace_query)
+                        replace_query = "SELECT `name` FROM `deleted_module` WHERE `moduleID` = %s"
+                        replace = get_from_db(replace_query, record[9])
                         record[11] = replace[0][0]
                     # csv = 'Session ID, User ID, User Name, Module ID, Module Name, Session Date, Player Score, Start Time, End Time, Time Spent, Platform, Mode\n'
                     csv = csv + f"""{record[0]}, {record[1]}, {record[10]}, {record[2]}, {record[9]}, {record[11]}, {record[3]}, {record[4]}, {getTimeDiffFormatted(time_obj = record[5])[0]}, {getTimeDiffFormatted(time_obj = record[6])[0] if record[6] else None}, {time_spent}, {platform}, {record[8]}\n"""

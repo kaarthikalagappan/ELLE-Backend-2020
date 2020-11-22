@@ -95,22 +95,19 @@ class ModuleStats(Resource):
         stats = []
         for platform in GAME_PLATFORMS:
             if permission != 'su' and permission != 'pf':
-                query = f"SELECT * FROM `session` WHERE `moduleID` = {module_id} AND `platform` = '{platform}' AND `userID` = {user_id}"
-                # USE THIS FOR FINAL VERSION print("use this")
-                # query = f"""SELECT `session`.* FROM `session` 
-                #         INNER JOIN `user` ON `session`.`userID` = `user`.`userID` 
-                #         WHERE `session`.`moduleID` = {module_id} 
-                #         AND `session`.`platform` = '{platform}' 
-                #         AND `userID` = {user_id}
-                #         AND ({permission_options})"""
+                query = f"""SELECT `session`.* FROM `session` 
+                        INNER JOIN `user` ON `session`.`userID` = `user`.`userID` 
+                        WHERE `session`.`moduleID` = {module_id} 
+                        AND `session`.`platform` = '{platform}' 
+                        AND `userID` = {user_id}
+                        AND ({permission_options})"""
             else:
-                query = f"SELECT * FROM `session` WHERE `moduleID` = {module_id} AND `platform` = '{platform}'"
-                # USE THIS FOR FINAL VERSION print("use this")
-                # query = f"""SELECT `session`.* FROM `session` 
-                #         INNER JOIN `user` ON `session`.`userID` = `user`.`userID` 
-                #         WHERE `session`.`moduleID` = {module_id} 
-                #         AND `session`.`platform` = '{platform}' 
-                #         AND ({permission_options})"""
+                query = f"""SELECT `session`.* FROM `session` 
+                        INNER JOIN `user` ON `session`.`userID` = `user`.`userID` 
+                        WHERE `session`.`moduleID` = {module_id} 
+                        AND `session`.`platform` = '{platform}' 
+                        AND ({permission_options})"""
+            
             sessions = querySessionsToJSON(query)
             stat = getAverages(sessions)
             if not stat:
@@ -153,20 +150,16 @@ class AllModuleStats(Resource):
 
         moduleIDs = get_from_db(query)
         if permission != 'su' and permission != 'pf':
-            query = "SELECT * FROM `session` INNER JOIN `user` ON `user`.`userID` = `session`.`userID` WHERE `moduleID` = %s AND `userID` = %s AND `user`.`permissionGroup` = 'st'"
-            # # USE THIS FOR FINAL VERSION print("use this")
-            # query = """SELECT `session`.* FROM `session` 
-            #         INNER JOIN `user` ON `user`.`userID` = `session`.`userID` 
-            #         WHERE `moduleID` = %s 
-            #         AND `session`.`userID` = %s
-            #         AND `user`.`permissionGroup` = 'st'"""
+            query = """SELECT `session`.* FROM `session` 
+                    INNER JOIN `user` ON `user`.`userID` = `session`.`userID` 
+                    WHERE `moduleID` = %s 
+                    AND `session`.`userID` = %s
+                    AND `user`.`permissionGroup` = 'st'"""
         else:
-            query = "SELECT * FROM `session` INNER JOIN `user` ON `user`.`userID` = `session`.`userID` WHERE `moduleID` = %s AND `user`.`permissionGroup` = 'st'"
-            # # USE THIS FOR FINAL VERSION print("use this")
-            # query = """SELECT `session`.* FROM `session` 
-            #         INNER JOIN `user` ON `user`.`userID` = `session`.`userID` 
-            #         WHERE `moduleID` = %s 
-            #         AND (""" + permission_options + ")"
+            query = """SELECT `session`.* FROM `session` 
+                    INNER JOIN `user` ON `user`.`userID` = `session`.`userID` 
+                    WHERE `moduleID` = %s 
+                    AND (""" + permission_options + ")"
 
         stats = []
         for moduleID in moduleIDs:
@@ -217,23 +210,15 @@ class PlatformStats(Resource):
                 permission_options = permission_options + " OR `user`.`permissionGroup` = 'pf'"
         
         if permission != 'su' and permission != 'pf':
-            retrieve_stats_query = """
-                    SELECT `session`.* FROM `session` WHERE `session`.`platform` = %s
-                    """
-            # # USE THIS FOR FINAL VERSION print("use this")
-            # # if student, they can only retrieve platform stats for their own data
-            # retrieve_stats_query = """SELECT `session`.* FROM session WHERE `session`.`platform` = %s
-            #                        AND `session`.`userID` = """ + str(user_id)
+            # if student, they can only retrieve platform stats for their own data
+            retrieve_stats_query = """SELECT `session`.* FROM session WHERE `session`.`platform` = %s
+                                   AND `session`.`userID` = """ + str(user_id)
         else:
-            retrieve_stats_query = """
-                    SELECT `session`.* FROM `session` WHERE `session`.`platform` = %s
-                    """
-            # # USE THIS FOR FINAL VERSION print("use this")
-            # retrieve_stats_query = """SELECT `session`.* FROM session 
-            #                           INNER JOIN `user` ON `user`.`userID` = `session`.`userID`
-            #                           WHERE `session`.`platform` = %s
-            #                           AND (""" + permission_options + """)
-            #                        """
+            retrieve_stats_query = """SELECT `session`.* FROM session 
+                                      INNER JOIN `user` ON `user`.`userID` = `session`.`userID`
+                                      WHERE `session`.`platform` = %s
+                                      AND (""" + permission_options + """)
+                                   """
         frequency_objs = 0
         stats = {}
         for platform in GAME_PLATFORMS:
@@ -369,16 +354,12 @@ class TermsPerformance(Resource):
                     return returnMessage("Not associated with that group"), 400
             groupID_list = "= " + str(data['groupID'])
 
-        # # USE THIS print("use this")
-        # get_associated_group_users = f"""
-        #                             SELECT `group_user`.`userID` FROM `group_user` 
-        #                             INNER JOIN `user` ON `user`.`userID` = `group_user`.`userID` 
-        #                             WHERE `group_user`.`groupID` {groupID_list} 
-        #                             AND ({permission_options})
-        #                             """
         get_associated_group_users = f"""
-                                      SELECT DISTINCT `group_user`.`userID` FROM `group_user` WHERE `group_user`.`groupID` {groupID_list}
-                                      """
+                                    SELECT `group_user`.`userID` FROM `group_user` 
+                                    INNER JOIN `user` ON `user`.`userID` = `group_user`.`userID` 
+                                    WHERE `group_user`.`groupID` {groupID_list} 
+                                    AND ({permission_options})
+                                    """
 
         # If student user, they can only retrieve their own records
         if permission != 'su' and permission != 'pf':

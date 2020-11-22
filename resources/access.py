@@ -65,10 +65,10 @@ class Access(Resource):
             # student to either TA or revert back to student status/level
             if data['groupID'] is not None:
                 query = f"""UPDATE `group_user` SET `accessLevel` = '{data['accessLevel']}' 
-                        WHERE `userID` = {data['userID']} AND `groupID` = {data['groupID']}"""
+                        WHERE `userID` = {int(data['userID'])} AND `groupID` = {int(data['groupID'])}"""
             else:
                 query = f"""UPDATE `user` SET `permissionGroup` = '{data['accessLevel']}' 
-                        WHERE `userID` = {data['userID']}"""
+                        WHERE `userID` = {int(data['userID'])}"""
             
             post_to_db(query, None, conn, cursor)
             
