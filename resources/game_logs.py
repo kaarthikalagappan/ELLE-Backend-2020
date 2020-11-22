@@ -38,7 +38,7 @@ class GameLog(Resource):
                 raise CustomException("If game is in VR platform, then need to specify gamename when creating game_log", 400)
 
             query = f"INSERT INTO `game_log` (`userID`, `moduleID`, `correct`, `incorrect`, `platform`, `time`) \
-                VALUES ({data['userID']},{data['moduleID']},{data['correct']},{data['incorrect']},'{data['platform'][:3]}','{data['time']}')"
+                VALUES ('{data['userID']}','{data['moduleID']}','{data['correct']}','{data['incorrect']}','{data['platform'][:3]}','{data['time']}')"
             post_to_db(query, None, conn, cursor)
             raise ReturnSuccess("Successfully created a game_log record", 206)
         except CustomException as error:
@@ -84,7 +84,7 @@ class GameLog(Resource):
                     raise ReturnSuccess("No game_logs found", 204)
             #userID has no value in JSON, search using user's jwt token as parameter
             elif len(data['userID']) == 0 and not data['moduleID']:
-                query = f"SELECT * from `game_log` WHERE `userID` = {user_id}"
+                query = f"SELECT * from `game_log` WHERE `userID` = '{user_id}'"
                 results = get_from_db(query, None, conn, cursor)
                 records = []
                 if results and results[0]:
@@ -96,7 +96,7 @@ class GameLog(Resource):
                     raise ReturnSuccess("No game_logs found for the chosen user", 205)
             #only userID passed in, search only for given userID
             elif data['userID'] and not data['moduleID']:
-                query = f"SELECT * from `game_log` WHERE `userID` = {data['userID']}"
+                query = f"SELECT * from `game_log` WHERE `userID` = '{data['userID']}'"
                 results = get_from_db(query, None, conn, cursor)
                 records = []
                 if results and results[0]:
@@ -108,7 +108,7 @@ class GameLog(Resource):
                     raise ReturnSuccess("No game_logs found for the chosen user", 206)
             #only moduleID passed in, search only for given moduleID
             elif data['moduleID'] and not data['userID']:
-                query = f"SELECT * from `game_log` WHERE `moduleID` = {data['moduleID']}"
+                query = f"SELECT * from `game_log` WHERE `moduleID` = '{data['moduleID']}'"
                 results = get_from_db(query, None, conn, cursor)
                 records = []
                 if results and results[0]:

@@ -8,7 +8,8 @@ from flask_jwt_extended import (
     jwt_required,
     jwt_refresh_token_required,
     get_raw_jwt,
-    get_current_user
+    get_current_user,
+    get_jti
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from flaskext.mysql import MySQL
@@ -42,7 +43,7 @@ class Users(Resource):
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
-            query = f"SELECT * FROM user WHERE user.userID != {user_id}"
+            query = f"SELECT * FROM `user` WHERE `user`.`userID` != '{user_id}'"
             result = get_from_db(query, None, conn, cursor)
 
             final_list_users = []
@@ -90,7 +91,7 @@ class User(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            query = "SELECT * FROM user WHERE userID = "+ str(user_id)
+            query = f"SELECT * FROM `user` WHERE `userID` = '{user_id}'"
             result = get_from_db(query, None, conn, cursor)
             for row in result:
                 newUserObject = {}
@@ -128,8 +129,8 @@ class User(Resource):
             cursor = conn.cursor()
             if data['newEmail'] == '':
                 data['newEmail'] = None
-            update_email_query = f"UPDATE `user` SET `email` = '{data['newEmail']}' WHERE `user`.`userID` = {user_id}"
-            post_to_db(update_email_query)
+            update_email_query = "UPDATE `user` SET `email` = %s WHERE `user`.`userID` = %s"
+            post_to_db(update_email_query, (data['newEmail'], user_id))
 
             raise ReturnSuccess("Successfully changed email", 200)
         except CustomException as error:
@@ -150,15 +151,21 @@ class User(Resource):
 class UserLogout(Resource):
     @jwt_required
     def post(self):
-        permission, user_id = validate_permissions()
+        data = {}
+        data['refresh_token'] = getParameter("refresh_token", str, False, "")
 
+        permission, user_id = validate_permissions()
         if not permission or not user_id:
             return errorMessage("Invalid user"), 401
         
         jti = get_raw_jwt()['jti']
-        print(jti)
-        query = f"INSERT INTO tokens VALUES ('{jti}')"
+        query = f"INSERT INTO `tokens` VALUES ('{jti}')"
         post_to_db(query)
+
+        if data['refresh_token']:
+            jti = get_jti(data['refresh_token'])
+            query = f"INSERT INTO `tokens` VALUES ('{jti}')"
+            post_to_db(query)
 
         return returnMessage("Successfully logged out"), 200
 
@@ -171,15 +178,11 @@ class UserLogin(Resource):
         data['password'] = getParameter("password", str, True, "")
         data['username'] = data['username'].lower()
 
-        print(data['username'])
-        print(data['password'])
-
         try:
             conn = mysql.connect()
             cursor = conn.cursor()
 
             find_user, user = find_by_name(data['username'])
-            print(find_user, user)
             if find_user:
                 if check_password_hash(user[2], data['password']):
                     expires = datetime.timedelta(days=14)
@@ -237,7 +240,7 @@ class UserRegister(Resource):
                 if find_email:
                     raise CustomException("Email already exists.", 401)
  
-            query = "INSERT INTO user (`username`, `password`, `permissionGroup`, `email`) VALUES (%s, %s, %s, %s)"
+            query = "INSERT INTO `user` (`username`, `password`, `permissionGroup`, `email`) VALUES (%s, %s, %s, %s)"
             salted_password = generate_password_hash(data['password'])
             post_to_db(query, (data['username'], salted_password, 'st', data['email']), conn, cursor)
 
@@ -343,7 +346,7 @@ class ForgotPassword(Resource):
             check_token_query = f"SELECT `user`.`userID` FROM `user` WHERE `user`.`pwdResetToken` = '{resetToken}'"
             if_exist = get_from_db(check_token_query)
 
-        update_pwdToken_query = f"UPDATE user SET pwdResetToken = '{generate_password_hash(resetToken)}' WHERE userID = {associated_user[0][0]}"
+        update_pwdToken_query = f"UPDATE `user` SET `pwdResetToken` = '{generate_password_hash(resetToken)}' WHERE `userID` = '{associated_user[0][0]}'"
         post_to_db(update_pwdToken_query)
 
         msg = Message("Forgot Password - EndLess Learner",
@@ -359,13 +362,13 @@ class ChangePassword(Resource):
     # This API to used to reset another user's password or the current user's password
     @jwt_required
     def post(self):
-        permission, user_id = validate_permissions()
-        if not permission or not user_id:
-            return errorMessage("Unauthorized user"), 401
-
         data = {}
         data['userID'] = getParameter("userID", str, False, "")
         data['password'] = getParameter("password", str, True, "")
+
+        permission, user_id = validate_permissions()
+        if not permission or not user_id:
+            return errorMessage("Unauthorized user"), 401
         
         try:
             conn = mysql.connect()
@@ -571,7 +574,7 @@ class GenerateOTC(Resource):
             cursor = conn.cursor()
 
             otc = otcGenerator()
-            query = f"UPDATE `user` SET `otc`= {otc} WHERE `userID`= {user_id}"
+            query = f"UPDATE `user` SET `otc`= '{otc}' WHERE `userID`= '{user_id}'"
             results = post_to_db(query, None, conn, cursor)
 
             raise ReturnSuccess({"otc" : otc}, 200)
@@ -598,12 +601,12 @@ class OTCLogin(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            query = f"SELECT * FROM `user` WHERE `otc`= {data['otc']}"
+            query = f"SELECT * FROM `user` WHERE `otc`= '{data['otc']}'"
             results = get_from_db(query, None, conn, cursor)
             
             # Remove the otc from user after logging in
             if results and results[0]:
-                query = "UPDATE `user` SET `otc`=%s WHERE `userID`=%s"
+                query = "UPDATE `user` SET `otc`= %s WHERE `userID`= %s"
                 post_to_db(query, (None, results[0][0]), conn, cursor)
             else:
                 raise CustomException("Invalid otc", 400)
@@ -641,7 +644,7 @@ class User_Preferences(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            query = f"SELECT * from `user_preferences` WHERE `userID` = {user_id}"
+            query = f"SELECT * from `user_preferences` WHERE `userID` = '{user_id}'"
             user_preference = get_from_db(query)
             if not user_preference or not user_preference[0]:
                 return errorMessage("An error occured"), 500
@@ -682,7 +685,7 @@ class User_Preferences(Resource):
             update_query = f"""
                             UPDATE `user_preferences` SET
                             `preferredHand` = '{data['preferredHand']}', `vrGloveColor` = '{data['vrGloveColor']}'
-                            WHERE `user_preferences`.`userID` = {user_id}
+                            WHERE `user_preferences`.`userID` = '{user_id}'
                             """
             post_to_db(update_query, None, conn, cursor)
             
@@ -711,7 +714,7 @@ class Refresh(Resource):
             cursor = conn.cursor()
 
             user_id = get_jwt_identity()
-            query = f"SELECT `permissionGroup`, `email` FROM `user` WHERE `userID`= {user_id}"
+            query = f"SELECT `permissionGroup`, `email` FROM `user` WHERE `userID`= '{user_id}'"
             permission = get_from_db(query, None, conn, cursor)
             user_obj = UserObject(user_id=user_id, permissionGroup=permission[0][0])
             raise ReturnSuccess({'access_token': create_access_token(identity=user_obj), 'user_id' : user_id }, 200)

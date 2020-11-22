@@ -40,11 +40,11 @@ class LoggedAnswer(Resource):
 
             if data['mode']:
                 query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`, `mode`, `log_time`) \
-                    VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']},'{data['mode']}','{formatted_time}')"
+                    VALUES ('{data['questionID']}','{data['termID']}','{data['sessionID']}','{data['correct']}','{data['mode']}','{formatted_time}')"
                 post_to_db(query, None, conn, cursor)
             else:
                 query = f"INSERT INTO `logged_answer` (`questionID`, `termID`, `sessionID`, `correct`, `log_time`) \
-                    VALUES ({data['questionID']},{data['termID']},{data['sessionID']},{data['correct']}, '{formatted_time}')"
+                    VALUES ('{data['questionID']}','{data['termID']}','{data['sessionID']}','{data['correct']}', '{formatted_time}')"
                 post_to_db(query, None, conn, cursor)
             raise ReturnSuccess("Successfully created a logged_answer record", 205)
         except CustomException as error:
@@ -97,15 +97,15 @@ class LoggedAnswer(Resource):
                 user_exp = " = " + str(user_id)
             
             get_questions_query = f"""
-                                SELECT DISTINCT sessionID FROM session 
-                                WHERE moduleID {module_exp} AND
-                                userID {user_exp} AND sessionID {sessionID}
+                                SELECT DISTINCT `sessionID` FROM `session` 
+                                WHERE `moduleID` '{module_exp}' AND
+                                userID '{user_exp}' AND sessionID '{sessionID}'
                                 """
             session_id_list = get_from_db(get_questions_query, None, conn, cursor)
 
-            get_logged_answer_query = "SELECT logged_answer.*, term.front FROM logged_answer \
-                                    INNER JOIN term ON term.termID = logged_answer.termID \
-                                    WHERE sessionID = %s"
+            get_logged_answer_query = "SELECT `logged_answer`.*, `term`.`front` FROM `logged_answer` \
+                                    INNER JOIN `term` ON `term`.`termID` = `logged_answer`.`termID` \
+                                    WHERE `sessionID` = %s"
             logged_answers = []
 
             for sessionID in session_id_list:
@@ -152,7 +152,7 @@ class GetLoggedAnswerCSV(Resource):
         except redis.exceptions.ConnectionError:
             redis_conn = None
 
-        checksum_query = "CHECKSUM TABLE logged_answer"
+        checksum_query = "CHECKSUM TABLE `logged_answer`"
         checksum = get_from_db(checksum_query)
         checksum = str(checksum[0][1])
 
@@ -164,7 +164,7 @@ class GetLoggedAnswerCSV(Resource):
         if checksum == logged_ans_chks:
             csv = redis_conn.get('logged_ans_csv')
         else:
-            last_query = "SELECT MAX(logged_answer.logID) FROM logged_answer"
+            last_query = "SELECT MAX(logged_answer.logID) FROM `logged_answer`"
             last_db_id = get_from_db(last_query)
             last_db_id = str(last_db_id[0][0])
 
@@ -173,7 +173,7 @@ class GetLoggedAnswerCSV(Resource):
             else:
                 last_rd_id = None
 
-            count_query = "SELECT COUNT(*) FROM logged_answer"
+            count_query = "SELECT COUNT(*) FROM `logged_answer`"
             db_count = get_from_db(count_query)
             db_count = str(db_count[0][0])
 
@@ -185,27 +185,27 @@ class GetLoggedAnswerCSV(Resource):
             if db_count != rd_log_ans_count or rd_log_ans_count is None:
                 csv = 'Log ID, User ID, Username, Module ID, Deleted Module ID, Module Name, Question ID, Deleted Question ID, Term ID, Deleted Term ID, Session ID, Correct, Log time, Mode\n'
                 query = """
-                        SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name, session.deleted_moduleID FROM logged_answer 
-                        INNER JOIN session ON session.sessionID = logged_answer.sessionID
-                        INNER JOIN user ON user.userID = session.userID
-                        INNER JOIN module on module.moduleID = session.moduleID
+                        SELECT `logged_answer`.*, `session`.`userID`, `user`.`username`, `module`.`moduleID`, `module`.`name`, `session`.`deleted_moduleID` FROM `logged_answer` 
+                        INNER JOIN `session` ON `session`.`sessionID` = `logged_answer`.`sessionID`
+                        INNER JOIN `user` ON `user`.`userID` = `session`.`userID`
+                        INNER JOIN `module` on `module`.`moduleID` = `session`.`moduleID`
                         """
                 results = get_from_db(query)
                 if results and results[0]:
                     for record in results:
                         if record[11] is None:
-                            replace_query = f"SELECT `name` FROM deleted_module WHERE moduleID = {record[13]}"
+                            replace_query = f"SELECT `name` FROM `deleted_module` WHERE `moduleID` = '{record[13]}'"
                             replace = get_from_db(replace_query)
                             record[12] = replace[0][0]
                         csv = csv + f"""{record[0]}, {record[9]}, {record[10]}, {record[11]}, {record[13]}, {record[12]}, {record[1]}, {record[7]}, {record[2]}, {record[8]} {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
             else:
                 csv = ""
                 query = f"""
-                        SELECT logged_answer.*, session.userID, user.username, module.moduleID, module.name, session.deleted_moduleID FROM logged_answer 
-                        INNER JOIN session ON session.sessionID = logged_answer.sessionID
-                        INNER JOIN user ON user.userID = session.userID
-                        INNER JOIN module on module.moduleID = session.moduleID
-                        WHERE logID > {last_db_id}
+                        SELECT `logged_answer`.*, `session`.`userID`, `user`.`username`, `module`.`moduleID`, `module`.`name`, `session`.`deleted_moduleID` FROM `logged_answer` 
+                        INNER JOIN `session` ON `session`.`sessionID` = `logged_answer`.`sessionID`
+                        INNER JOIN `user` ON `user`.`userID` = `session`.`userID`
+                        INNER JOIN `module` on `module`.`moduleID` = `session`.`moduleID`
+                        WHERE logID > '{last_db_id}'
                         """
                 results = get_from_db(query)
                 if redis_conn.get('logged_ans_csv') is not None:
@@ -214,7 +214,7 @@ class GetLoggedAnswerCSV(Resource):
                 if results and results[0]:
                     for record in results:
                         if record[11] is None:
-                            replace_query = f"SELECT `name` FROM deleted_module WHERE moduleID = {record[13]}"
+                            replace_query = f"SELECT `name` FROM `deleted_module` WHERE `moduleID` = '{record[13]}'"
                             replace = get_from_db(replace_query)
                             record[12] = replace[0][0]
                         csv = csv + f"""{record[0]}, {record[9]}, {record[10]}, {record[11]}, {record[13]}, {record[12]}, {record[1]}, {record[7]}, {record[2]}, {record[8]} {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
