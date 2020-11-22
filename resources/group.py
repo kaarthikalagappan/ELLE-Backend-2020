@@ -30,8 +30,8 @@ class Group(Resource):
                 raise CustomException("User cannot create classes.", 400)
 
             # Checks if the groupName already exists
-            dupe_query = f"SELECT `groupID` FROM `group` WHERE `groupName`= '{data['groupName']}'"
-            dupe_results = get_from_db(dupe_query, None, conn, cursor)
+            dupe_query = "SELECT `groupID` FROM `group` WHERE `groupName`= %s"
+            dupe_results = get_from_db(dupe_query, data['groupName'], conn, cursor)
 
             if dupe_results:
                 raise CustomException("groupName already exists.", 400)
@@ -39,17 +39,17 @@ class Group(Resource):
                 # Randomly generate 6-long string of numbers and letters
                 # String must be unique for each class
                 group_code = groupCodeGenerator()
-                gc_query = f"SELECT `groupID` FROM `group` WHERE `groupCode`= '{group_code}'"
-                gc_results = get_from_db(gc_query, None, conn, cursor)
+                gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`= %s"
+                gc_results = get_from_db(gc_query, group_code, conn, cursor)
 
                 if gc_results:
                     raise CustomException("groupCode already exists", 400)
 
-                query = f"INSERT INTO `group` (`groupName`, `groupCode`) VALUES ('{data['groupName']}', '{group_code}')"
-                post_to_db(query, None, conn, cursor)
+                query = "INSERT INTO `group` (`groupName`, `groupCode`) VALUES (%s, %s)"
+                post_to_db(query, (data['groupName'], group_code), conn, cursor)
 
-                g_query = f"SELECT `groupID` FROM `group` WHERE `groupName`= '{data['groupName']}'"
-                g_results = get_from_db(g_query, None, conn, cursor)
+                g_query = "SELECT `groupID` FROM `group` WHERE `groupName`= %s"
+                g_results = get_from_db(g_query, data['groupName'], conn, cursor)
                 group_id = g_results[0][0]
 
                 # Users who creates a class have their accesLevel default to 'pf'
@@ -99,29 +99,29 @@ class Group(Resource):
         
             # Checking groupName and make sure it is unique
             if data['groupName'] is not None:
-                gn_query = f"SELECT `groupID` FROM `group` WHERE `groupName`= '{data['groupName']}'"
-                gn_results = get_from_db(gn_query, None, conn, cursor)
+                gn_query = "SELECT `groupID` FROM `group` WHERE `groupName`= %s"
+                gn_results = get_from_db(gn_query, data['groupName'], conn, cursor)
             
                 if gn_results:
                     raise CustomException("groupName already in use.", 400)
 
             # Checking groupCode and make sure it is unique
             if data['groupCode'] is not None:
-                gc_query = f"SELECT `groupID` FROM `group` WHERE `groupCode`= '{data['groupCode']}'"
-                gc_results = get_from_db(gc_query, None, conn, cursor)
+                gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`= %s"
+                gc_results = get_from_db(gc_query, data['groupCode'], conn, cursor)
             
                 if gc_results:
                     raise CustomException("groupCode already in use.", 400)
         
             if data['groupCode'] is not None and data['groupName'] is None:
-                query = f"UPDATE `group` SET `groupCode`= '{data['groupCode']}' WHERE `groupID`= '{data['groupID']}'"
-                results = post_to_db(query, None, conn, cursor)
+                query = "UPDATE `group` SET `groupCode`= %s WHERE `groupID`= %s"
+                results = post_to_db(query, (data['groupCode'], data['groupID']), conn, cursor)
             elif data['groupCode'] is None and data['groupName'] is not None:
-                query = f"UPDATE `group` SET `groupName`= '{data['groupName']}' WHERE `groupID`= '{data['groupID']}'"
-                results = post_to_db(query, None, conn, cursor)
+                query = "UPDATE `group` SET `groupName`= %s WHERE `groupID`= %s"
+                results = post_to_db(query, (data['groupName'], data['groupID']), conn, cursor)
             elif data['groupCode'] is not None and data['groupName'] is not None:
-                query = f"UPDATE `group` SET `groupName`= '{data['groupName']}', `groupCode`= '{data['groupCode']}' WHERE `groupID`= '{data['groupID']}'"
-                results = post_to_db(query, None, conn, cursor)
+                query = "UPDATE `group` SET `groupName`= %s, `groupCode`= %s WHERE `groupID`= %s"
+                results = post_to_db(query, (data['groupName'], data['groupCode'], data['groupID']), conn, cursor)
             else:
                 raise ReturnSuccess("No values passed in, nothing changed.", 200)
 
@@ -158,8 +158,8 @@ class Group(Resource):
             if permission == 'st':
                 raise CustomException("Invalid permissions.", 400)
 
-            query = f"DELETE FROM `group` WHERE `groupID` = '{data['groupID']}'"
-            delete_from_db(query, None, conn, cursor)
+            query = "DELETE FROM `group` WHERE `groupID` = %s"
+            delete_from_db(query, data['groupID'], conn, cursor)
         
             raise ReturnSuccess("Successfully deleted group.", 200)
         except CustomException as error:
@@ -194,8 +194,8 @@ class GroupRegister(Resource):
             if permission == 'su':
                 return CustomException("Superadmins cannot register for classes."), 400
 
-            query = f"SELECT `groupID` FROM `group` WHERE `groupCode` = '{data['groupCode']}'"
-            results = get_from_db(query, None, conn, cursor)
+            query = "SELECT `groupID` FROM `group` WHERE `groupCode` = %s"
+            results = get_from_db(query, data['groupCode'], conn, cursor)
 
             # if groupCode exists in group table
             if results:
@@ -203,14 +203,14 @@ class GroupRegister(Resource):
 
                 # Check if the user has already registered for the group
                 # otherwise continue with registering the user for the group
-                dupe_query = f"SELECT `userID` FROM `group_user` WHERE `groupID`= '{group_id}' AND `userID`= '{user_id}'"
-                dupe_results = get_from_db(dupe_query, None, conn, cursor)
+                dupe_query = "SELECT `userID` FROM `group_user` WHERE `groupID`= %s AND `userID`= %s"
+                dupe_results = get_from_db(dupe_query, (group_id, user_id), conn, cursor)
 
                 if dupe_results:
                     raise CustomException("User has already registered for the class.", 207)
                 else:
-                    gu_query = f"INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES ('{user_id}', '{group_id}', '{permission}')"
-                    post_to_db(gu_query, None, conn, cursor)
+                    gu_query = "INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES (%s, %s, %s)"
+                    post_to_db(gu_query, (user_id, group_id, permission), conn, cursor)
             else:
                 raise CustomException("Invalid class code.", 206)
 
@@ -350,16 +350,16 @@ class GenerateGroupCode(Resource):
 
             group_code = groupCodeGenerator()
             while True:
-                gc_query = f"SELECT `groupID` FROM `group` WHERE `groupCode`= '{group_code}'"
-                gc_results = get_from_db(gc_query, None, conn, cursor)
+                gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`= %s"
+                gc_results = get_from_db(gc_query, group_code, conn, cursor)
 
                 if gc_results:
                     group_code = groupCodeGenerator()
                 else:
                     break
             
-            query = f"UPDATE `group` SET `groupCode`= '{group_code}' WHERE `groupID`= '{data['groupID']}'"
-            results = post_to_db(query, None, conn, cursor)
+            query = "UPDATE `group` SET `groupCode`= %s WHERE `groupID`= %s"
+            results = post_to_db(query, (group_code, data['groupID']), conn, cursor)
 
             raise ReturnSuccess({"groupCode" : group_code}, 200)
         except CustomException as error:

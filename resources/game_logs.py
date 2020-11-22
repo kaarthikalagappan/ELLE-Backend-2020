@@ -37,9 +37,8 @@ class GameLog(Resource):
             elif not data['gameName'] or data['gameName'] == '':
                 raise CustomException("If game is in VR platform, then need to specify gamename when creating game_log", 400)
 
-            query = f"INSERT INTO `game_log` (`userID`, `moduleID`, `correct`, `incorrect`, `platform`, `time`) \
-                VALUES ('{data['userID']}','{data['moduleID']}','{data['correct']}','{data['incorrect']}','{data['platform'][:3]}','{data['time']}')"
-            post_to_db(query, None, conn, cursor)
+            query = "INSERT INTO `game_log` (`userID`, `moduleID`, `correct`, `incorrect`, `platform`, `time`) VALUES (%s, %s, %s, %s, %s, %s)"
+            post_to_db(query, (data['userID'], data['moduleID'], data['correct'], data['incorrect'], data['platform'][:3], data['time']), conn, cursor)
             raise ReturnSuccess("Successfully created a game_log record", 206)
         except CustomException as error:
             conn.rollback()
@@ -72,7 +71,7 @@ class GameLog(Resource):
 
             #no parameters passed, search for all game_logs
             if not data['userID'] and not data['moduleID']:
-                query = f"SELECT * from `game_log`"
+                query = "SELECT * from `game_log`"
                 results = get_from_db(query, None, conn, cursor)
                 records = []
                 if results and results[0]:
@@ -84,8 +83,8 @@ class GameLog(Resource):
                     raise ReturnSuccess("No game_logs found", 204)
             #userID has no value in JSON, search using user's jwt token as parameter
             elif len(data['userID']) == 0 and not data['moduleID']:
-                query = f"SELECT * from `game_log` WHERE `userID` = '{user_id}'"
-                results = get_from_db(query, None, conn, cursor)
+                query = "SELECT * from `game_log` WHERE `userID` = %s"
+                results = get_from_db(query, user_id, conn, cursor)
                 records = []
                 if results and results[0]:
                     for game_log in results:
@@ -96,8 +95,8 @@ class GameLog(Resource):
                     raise ReturnSuccess("No game_logs found for the chosen user", 205)
             #only userID passed in, search only for given userID
             elif data['userID'] and not data['moduleID']:
-                query = f"SELECT * from `game_log` WHERE `userID` = '{data['userID']}'"
-                results = get_from_db(query, None, conn, cursor)
+                query = "SELECT * from `game_log` WHERE `userID` = %s"
+                results = get_from_db(query, data['userID'], conn, cursor)
                 records = []
                 if results and results[0]:
                     for game_log in results:
@@ -108,8 +107,8 @@ class GameLog(Resource):
                     raise ReturnSuccess("No game_logs found for the chosen user", 206)
             #only moduleID passed in, search only for given moduleID
             elif data['moduleID'] and not data['userID']:
-                query = f"SELECT * from `game_log` WHERE `moduleID` = '{data['moduleID']}'"
-                results = get_from_db(query, None, conn, cursor)
+                query = "SELECT * from `game_log` WHERE `moduleID` = %s"
+                results = get_from_db(query, data['moduleID'], conn, cursor)
                 records = []
                 if results and results[0]:
                     for game_log in results:

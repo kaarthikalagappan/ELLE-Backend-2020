@@ -45,8 +45,8 @@ class Answer(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            query = f"INSERT INTO answer (`questionID`, `termID`) VALUES ('{data['questionID']}', '{data['termID']}')"
-            post_to_db(query, None, conn, cursor)
+            query = "INSERT INTO answer (`questionID`, `termID`) VALUES (%s, %s)"
+            post_to_db(query, (data['questionID'], data['termID']), conn, cursor)
 
             raise ReturnSuccess("Successfully added answer!", 201)
         except CustomException as error:
@@ -85,8 +85,8 @@ class DeleteAnswer(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            query = f"DELETE FROM `answer` WHERE `questionID`= '{data['questionID']}' AND `termID` = '{data['termID']}'" 
-            post_to_db(query, None, conn, cursor)
+            query = "DELETE FROM `answer` WHERE `questionID`= %s AND `termID` = %s" 
+            post_to_db(query, (data['questionID'], data['termID']), conn, cursor)
 
             raise ReturnSuccess("Deleted Answer", 201)
         except CustomException as error:
@@ -152,15 +152,15 @@ class Modify(Resource):
                     #saving the image to a temporary folder
                     file.save(cross_plat_path(TEMP_UPLOAD_FOLDER + full_file_name))
 
-                    query = f"INSERT INTO `image` (`imageLocation`) VALUES ('{full_file_name}')"
-                    post_to_db(query, None, conn, cursor)
+                    query = "INSERT INTO `image` (`imageLocation`) VALUES (%s)"
+                    post_to_db(query, full_file_name, conn, cursor)
 
                     #moving the image to the Images folder upon successfully creating a record
                     os.rename(cross_plat_path(TEMP_UPLOAD_FOLDER + full_file_name), cross_plat_path(IMG_UPLOAD_FOLDER + full_file_name))
 
                     #get the inserted image's imageID
-                    query = f"SELECT `imageID` from im`age WHERE `imageLocation` = '{full_file_name}'"
-                    imageID = get_from_db(query, None, conn, cursor)
+                    query = "SELECT `imageID` from im`age WHERE `imageLocation` = %s"
+                    imageID = get_from_db(query, full_file_name, conn, cursor)
                     data['imageID'] = imageID[0][0]
                 else:
                     raise CustomException("File format of " + filename + extension + " is not supported. \
@@ -185,15 +185,15 @@ class Modify(Resource):
                     #saving the audio to a temporary folder
                     file.save(cross_plat_path(TEMP_UPLOAD_FOLDER + full_file_name))
 
-                    query = f"INSERT INTO `audio` (`audioLocation`) VALUES ('{full_file_name}')"
-                    post_to_db(query, None, conn, cursor)
+                    query = "INSERT INTO `audio` (`audioLocation`) VALUES (%s)"
+                    post_to_db(query, full_file_name, conn, cursor)
 
                     #moving the audio to the Audio folder upon successfully creating a record
                     os.rename(cross_plat_path(TEMP_UPLOAD_FOLDER + full_file_name), cross_plat_path(AUD_UPLOAD_FOLDER + full_file_name))
 
                     #get the inserted audio's audioID
-                    query = f"SELECT `audioID` from `audio` WHERE `audioLocation` = '{full_file_name}'"
-                    audioID = get_from_db(query, None, conn, cursor)
+                    query = "SELECT `audioID` from `audio` WHERE `audioLocation` = %s"
+                    audioID = get_from_db(query, full_file_name, conn, cursor)
                     data['audioID'] = audioID[0][0]
                 else:
                     raise CustomException("File format of " + str(filename) + str(extension) + " is not supported. \
@@ -203,17 +203,17 @@ class Modify(Resource):
             # 4 cases: there are new file in only audio, new file in only image
             #          new files in both audio and image, or no new files
             if data['audioID'] is not None  and data['imageID'] is not None:
-                query = f"UPDATE `question` SET `audioID` = '{data['audioID']}', `imageID` = '{data['imageID']}', `type` = '{data['type']}', `questionText` = '{data['questionText']}' WHERE `questionID` = '{data['questionID']}'"
-                post_to_db(query, None, conn, cursor)
+                query = "UPDATE `question` SET `audioID` = %s, `imageID` = %s, `type` = %s, `questionText` = %s WHERE `questionID` = %s"
+                post_to_db(query, (data['audioID'], data['imageID'], data['type'], data['questionText'], data['questionID']), conn, cursor)
             elif data['audioID'] is None and data['imageID'] is not None:
-                query = f"UPDATE `question` SET `imageID` = '{data['imageID']}', `type` = '{data['type']}', `questionText` = '{data['questionText']}' WHERE `questionID` = '{data['questionID']}'"
-                post_to_db(query, None, conn, cursor)
+                query = "UPDATE `question` SET `imageID` = %s, `type` = %s, `questionText` = %s WHERE `questionID` = %s"
+                post_to_db(query, (data['imageID'], data['type'], data['questionText'], data['questionID']), conn, cursor)
             elif data['audioID'] is not None and data['imageID'] is None:
-                query = f"UPDATE `question` SET `audioID` = '{data['audioID']}', `type` = '{data['type']}', `questionText` = '{data['questionText']}' WHERE `questionID` = '{data['questionID']}'"
-                post_to_db(query, None, conn, cursor)
+                query = "UPDATE `question` SET `audioID` = %s, `type` = %s, `questionText` = %s WHERE `questionID` = %s"
+                post_to_db(query, (data['audioID'], data['type'], data['questionText'], data['questionID']), conn, cursor)
             else:
-                query = f"UPDATE `question` SET `type` = '{data['type']}', `questionText` = '{data['questionText']}' WHERE `questionID` = '{data['questionID']}'"
-                post_to_db(query, None, conn, cursor)
+                query = "UPDATE `question` SET `type` = %s, `questionText` = %s WHERE `questionID` = %s"
+                post_to_db(query, (data['type'], data['questionText'], data['questionID']), conn, cursor)
             
             if data['removeAudio']:
                 query = "UPDATE `question` SET `audioID` = %s WHERE `questionID` = %s"
@@ -226,8 +226,8 @@ class Modify(Resource):
             # Modify existing question's answers
             new_ans_list = request.form.getlist('new_answers')
             new_ans_list = json.loads(new_ans_list[0])
-            query = f"SELECT * FROM `answer` WHERE `questionID` = '{data['questionID']}'"
-            result = get_from_db(query, None, conn, cursor)
+            query = "SELECT * FROM `answer` WHERE `questionID` = %s"
+            result = get_from_db(query, data['questionID'], conn, cursor)
             old_ans_list = [ans[1] for ans in result]
             dif_list = list(set(old_ans_list) ^ set(new_ans_list))
 
@@ -236,11 +236,11 @@ class Modify(Resource):
             # Otherwise add that answer
             for ans in dif_list:
                 if ans in old_ans_list:
-                    query = f"DELETE FROM `answer` WHERE `questionID` = '{data['questionID']}' AND `termID` = '{ans}'"
-                    post_to_db(query, None, conn, cursor)
+                    query = "DELETE FROM `answer` WHERE `questionID` = %s AND `termID` = %s"
+                    post_to_db(query, (data['questionID'], ans), conn, cursor)
                 else:
-                    query = f"INSERT INTO `answer` (`questionID`, `termID`) VALUES ('{data['questionID']}', '{ans}')"
-                    post_to_db(query, None, conn, cursor)
+                    query = "INSERT INTO `answer` (`questionID`, `termID`) VALUES (%s, %s)"
+                    post_to_db(query, (data['questionID'], ans), conn, cursor)
 
             term_obj_list = request.form.getlist('arr_of_terms')
             
@@ -248,8 +248,8 @@ class Modify(Resource):
             for term_obj in term_obj_list:
                 term_obj = json.loads(term_obj)
                 for term in term_obj:
-                    query = f"INSERT INTO `term` (`front`, `back`, `language`) VALUES ('{term['front']}', '{term['back']}', '{term['language']}')"
-                    post_to_db(query, None, conn, cursor)
+                    query = "INSERT INTO `term` (`front`, `back`, `language`) VALUES (%s, %s, %s)"
+                    post_to_db(query, (term['front'], term['back'], term['language']), conn, cursor)
                     term_query = "SELECT MAX(termID) FROM `term`"
                     result = get_from_db(term_query, None, conn, cursor)
                     termID = check_max_id(result) - 1
@@ -257,11 +257,11 @@ class Modify(Resource):
                     post_to_db(answer_query, (data['questionID'], termID), conn, cursor)
 
                     for t in term['tags']:
-                        tag_query = f"SELECT * FROM `tag` WHERE `termID` = '{termID}' AND `tagName` = '{str(t).lower()}'"
-                        tag_result = get_from_db(tag_query, None, conn, cursor)
+                        tag_query = "SELECT * FROM `tag` WHERE `termID` = %s AND `tagName` = %s'"
+                        tag_result = get_from_db(tag_query, (termID, str(t).lower()), conn, cursor)
                         if not tag_result:
-                            query = f"INSERT INTO `tag` (`termID`, `tagName`) VALUES ('{termID}', '{str(t).lower()}')"
-                            post_to_db(query, None, conn, cursor)
+                            query = "INSERT INTO `tag` (`termID`, `tagName`) VALUES (%s, %s)"
+                            post_to_db(query, (termID, str(t).lower()), conn, cursor)
 
             raise ReturnSuccess({"Message" : "Successfully modified the question", "questionID" : int(data['questionID'])}, 201)
         except CustomException as error:
@@ -295,13 +295,13 @@ class SearchType(Resource):
             cursor = conn.cursor()
 
             if data['type']:
-                query = f"SELECT DISTINCT `question`.* FROM `question` INNER JOIN `answer` on `answer`.`questionID` = `question`.`questionID` \
-                        INNER JOIN `term` on `term`.`termID` = `answer`.`termID` and `term`.`language` = '{data['language']}' WHERE `question`.`type` = '{data['type']}'"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT DISTINCT `question`.* FROM `question` INNER JOIN `answer` on `answer`.`questionID` = `question`.`questionID` \
+                        INNER JOIN `term` on `term`.`termID` = `answer`.`termID` and `term`.`language` = %s WHERE `question`.`type` = %s"
+                result = get_from_db(query, (data['language'], data['type']), conn, cursor)
             else:
-                query = f"SELECT DISTINCT question.* FROM `question` INNER JOIN answer on answer.questionID = question.questionID \
-                        INNER JOIN term on term.termID = answer.termID and term.language = '{data['language']}'"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT DISTINCT question.* FROM `question` INNER JOIN answer on answer.questionID = question.questionID \
+                        INNER JOIN term on term.termID = answer.termID and term.language = %s"
+                result = get_from_db(query, data['language'], conn, cursor)
 
             final_question_object = []
             for row in result:
@@ -313,19 +313,19 @@ class SearchType(Resource):
                 new_question_object['questionText'] = row[4]
 
                 if new_question_object['imageID']:
-                    query = f"SELECT * FROM `image` WHERE `imageID` = '{new_question_object['imageID']}'"
-                    result = get_from_db(query, None, conn, cursor)
+                    query = "SELECT * FROM `image` WHERE `imageID` = %s"
+                    result = get_from_db(query, new_question_object['imageID'], conn, cursor)
                     for row in result:
                         new_question_object['imageLocation'] = IMG_RETRIEVE_FOLDER + row[1] if row and row[1] else None
 
                 if new_question_object['audioID']:
-                    query = f"SELECT * FROM `audio` WHERE `audioID` = '{new_question_object['audioID']}'"
-                    result = get_from_db(query, None, conn, cursor)
+                    query = "SELECT * FROM `audio` WHERE `audioID` = %s"
+                    result = get_from_db(query, new_question_object['audioID'], conn, cursor)
                     for row in result:
                         new_question_object['audioLocation'] = AUD_RETRIEVE_FOLDER + row[1] if row and row[1] else None
 
-                query = f"SELECT * FROM `answer` WHERE `questionID` = '{new_question_object['questionID']}'"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT * FROM `answer` WHERE `questionID` = %s"
+                result = get_from_db(query, new_question_object['questionID'], conn, cursor)
                 new_question_object['answers'] = []
                 for row in result:
                     new_question_object['answers'].append(row[1])
@@ -361,9 +361,9 @@ class SearchText(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
 
-            query = f"SELECT DISTINCT `question`.* FROM `question` INNER JOIN `answer` on `answer`.`questionID` = `question`.`questionID` \
-                INNER JOIN `term` on `term`.`termID` = `answer`.`termID` and `term`.`language` = '{data['language']}' WHERE `question`.`questionText` = '{data['questionText']}'"
-            result = get_from_db(query, None, conn, cursor)
+            query = "SELECT DISTINCT `question`.* FROM `question` INNER JOIN `answer` on `answer`.`questionID` = `question`.`questionID` \
+                INNER JOIN `term` on `term`.`termID` = `answer`.`termID` and `term`.`language` = %s WHERE `question`.`questionText` = %s"
+            result = get_from_db(query, (data['language'], data['questionText']), conn, cursor)
             final_question_object = []
             for row in result:
                 new_question_object = {}
@@ -374,19 +374,19 @@ class SearchText(Resource):
                 new_question_object['questionText'] = row[4]
 
                 if new_question_object['imageID']:
-                    query = f"SELECT * FROM `image` WHERE `imageID` = '{new_question_object['imageID']}'"
-                    result = get_from_db(query, None, conn, cursor)
+                    query = "SELECT * FROM `image` WHERE `imageID` = %s"
+                    result = get_from_db(query, new_question_object['imageID'], conn, cursor)
                     for row in result:
                         new_question_object['imageLocation'] = IMG_RETRIEVE_FOLDER + row[1] if row and row[1] else None
 
                 if new_question_object['audioID']:
-                    query = f"SELECT * FROM `audio` WHERE `audioID` = '{new_question_object['audioID']}'"
-                    result = get_from_db(query, None, conn, cursor)
+                    query = "SELECT * FROM `audio` WHERE `audioID` = %s"
+                    result = get_from_db(query, new_question_object['audioID'], conn, cursor)
                     for row in result:
                         new_question_object['audioLocation'] = AUD_RETRIEVE_FOLDER + row[1] if row and row[1] else None
 
-                query = f"SELECT * FROM `answer` WHERE `questionID` = '{new_question_object['questionID']}'"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT * FROM `answer` WHERE `questionID` = %s"
+                result = get_from_db(query, new_question_object['questionID'], conn, cursor)
                 new_question_object['answers'] = []
                 for row in result:
                     new_question_object['answers'].append(row[1])
@@ -427,21 +427,21 @@ class DeleteQuestion(Resource):
             cursor = conn.cursor()
 
             if (find_question(int(data['questionID']))):
-                question_query = f"SELECT * FROM `question` WHERE `questionID` = '{data['questionID']}'"
-                question_data = get_from_db(question_query, None, conn, cursor)
+                question_query = "SELECT * FROM `question` WHERE `questionID` = %s"
+                question_data = get_from_db(question_query, data['questionID'], conn, cursor)
    
                 delete_query = "INSERT INTO `deleted_question` (`questionID`, `audioID`, `imageID`, `type`, `questionText`) VALUES (%s, %s, %s, %s, %s)"
                 post_to_db(delete_query, (question_data[0][0], question_data[0][1], question_data[0][2], question_data[0][3], question_data[0][4]))
 
-                la_query = f"SELECT `logID` FROM `logged_answer` WHERE `questionID` = '{question_data[0][0]}'"
-                la_results = get_from_db(la_query, None, conn, cursor)
+                la_query = "SELECT `logID` FROM `logged_answer` WHERE `questionID` = %s"
+                la_results = get_from_db(la_query, question_data[0][0], conn, cursor)
 
                 for log in la_results:
                     log_query = "UPDATE `logged_answer` SET `questionID` = %s, `deleted_questionID` = %s WHERE `logID` = %s"
                     post_to_db(log_query, (None, question_data[0][0], log[0]), None, conn, cursor)
 
-                query = f"DELETE FROM `question` WHERE `questionID` = '{data['questionID']}'"
-                delete_from_db(query, None, conn, cursor)
+                query = "DELETE FROM `question` WHERE `questionID` = %s"
+                delete_from_db(query, data['questionID'], conn, cursor)
                 raise ReturnSuccess("Successfully deleted question and answer set!", 201)
             else:
                 raise CustomException("No question with that ID exist!", 201)
@@ -506,15 +506,15 @@ class Question(Resource):
                     #saving the image to a temporary folder
                     file.save(cross_plat_path(TEMP_UPLOAD_FOLDER + full_file_name))
 
-                    query = f"INSERT INTO `image` (`imageLocation`) VALUES ('{full_file_name}')"
-                    post_to_db(query, None, conn, cursor)
+                    query = "INSERT INTO `image` (`imageLocation`) VALUES (%s)"
+                    post_to_db(query, full_file_name, conn, cursor)
 
                     #moving the image to the Images folder upon successfully creating a record
                     os.rename(cross_plat_path(TEMP_UPLOAD_FOLDER + full_file_name), cross_plat_path(IMG_UPLOAD_FOLDER + full_file_name))
 
                     #get the inserted image's imageID
-                    query = f"SELECT `imageID` from `image` WHERE `imageLocation` = '{full_file_name}'"
-                    imageID = get_from_db(query, None, conn, cursor)
+                    query = "SELECT `imageID` from `image` WHERE `imageLocation` = %s"
+                    imageID = get_from_db(query, full_file_name, conn, cursor)
                     data['imageID'] = imageID[0][0]
                 else:
                     raise CustomException("File format of " + filename + extension + " is not supported. \
@@ -539,15 +539,15 @@ class Question(Resource):
                     #saving the audio to a temporary folder
                     file.save(cross_plat_path(TEMP_UPLOAD_FOLDER + full_file_name))
 
-                    query = f"INSERT INTO `audio` (`audioLocation`) VALUES ('{full_file_name}')"
-                    post_to_db(query, None, conn, cursor)
+                    query = "INSERT INTO `audio` (`audioLocation`) VALUES (%s)"
+                    post_to_db(query, full_file_name, conn, cursor)
 
                     #moving the audio to the Audio folder upon successfully creating a record
                     os.rename(cross_plat_path(TEMP_UPLOAD_FOLDER + full_file_name), cross_plat_path(AUD_UPLOAD_FOLDER + full_file_name))
 
                     #get the inserted audio's audioID
-                    query = f"SELECT `audioID` from `audio` WHERE `audioLocation` = '{full_file_name}'"
-                    audioID = get_from_db(query, None, conn, cursor)
+                    query = "SELECT `audioID` from `audio` WHERE `audioLocation` = %s"
+                    audioID = get_from_db(query, full_file_name, conn, cursor)
                     data['audioID'] = audioID[0][0]
                 else:
                     raise CustomException("File format of " + str(filename) + str(extension) + " is not supported. \
@@ -565,35 +565,35 @@ class Question(Resource):
             question_id = check_max_id(result) - 1
 
             if data['moduleID']:
-                query = f"INSERT INTO `module_question` (`moduleID`, `questionID`) VALUES ('{data['moduleID']}', '{question_id}')"
-                post_to_db(query, None, conn, cursor)
+                query = "INSERT INTO `module_question` (`moduleID`, `questionID`) VALUES (%s, %s)"
+                post_to_db(query, (data['moduleID'], question_id), conn, cursor)
 
             # Add the existing terms to the question as answers
             ans_list = request.form.getlist('answers')
             ans_list = json.loads(ans_list[0])
             for ans in ans_list:
-                query = f"INSERT INTO `answer` (`questionID`, `termID`) VALUES ('{question_id}', '{ans}')"
-                post_to_db(query, None, conn, cursor)
+                query = "INSERT INTO `answer` (`questionID`, `termID`) VALUES (%s, %s)"
+                post_to_db(query, (question_id, ans), conn, cursor)
 
             # Creating new terms that will be linked to the question based on the objects passed in
             term_obj_list = request.form.getlist('arr_of_terms')
             for term_obj in term_obj_list:
                 term_obj = json.loads(term_obj)
                 for term in term_obj:
-                    query = f"INSERT INTO `term` (`front`, `back`, `language`) VALUES ('{term['front']}', '{term['back']}', '{term['language']}')"
-                    post_to_db(query, None, conn, cursor)
+                    query = "INSERT INTO `term` (`front`, `back`, `language`) VALUES (%s, %s, %s)"
+                    post_to_db(query, (term['front'], term['back'], term['language']), conn, cursor)
                     term_query = "SELECT MAX(termID) FROM `term`"
                     result = get_from_db(term_query, None, conn, cursor)
                     termID = check_max_id(result) - 1
-                    answer_query = f"INSERT INTO `answer` (`questionID`, `termID`) VALUES ('{question_id}', '{termID}')"
-                    post_to_db(answer_query, None, conn, cursor)
+                    answer_query = "INSERT INTO `answer` (`questionID`, `termID`) VALUES (%s, %s)"
+                    post_to_db(answer_query, (question_id, termID), conn, cursor)
 
                     for t in term['tags']:
-                        tag_query = f"SELECT * FROM `tag` WHERE `termID` = '{termID}' AND `tagName` = '{str(t).lower()}'"
-                        tag_result = get_from_db(tag_query, None, conn, cursor)
+                        tag_query = "SELECT * FROM `tag` WHERE `termID` = %s AND `tagName` = %s"
+                        tag_result = get_from_db(tag_query, (termID, str(t).lower()), conn, cursor)
                         if not tag_result:
-                            query = f"INSERT INTO `tag` (`termID`, `tagName`) VALUES ('{termID}', '{str(t).lower()}')"
-                            post_to_db(query, None, conn, cursor)
+                            query = "INSERT INTO `tag` (`termID`, `tagName`) VALUES (%s, %s)"
+                            post_to_db(query, (termID, str(t).lower()), conn, cursor)
                             
             raise ReturnSuccess({"Message" : "Successfully created a question", "questionID" : int(question_id)}, 201)
         except CustomException as error:
@@ -625,8 +625,8 @@ class Question(Resource):
             cursor = conn.cursor()
             
             if (find_question(data['questionID'])):
-                query = f"SELECT * FROM `question` WHERE `questionID` = '{data['questionID']}'"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT * FROM `question` WHERE `questionID` = %s"
+                result = get_from_db(query, data['questionID'], conn, cursor)
                 new_question_object = {}
                 for row in result:
                     new_question_object['questionID'] = row[0]
@@ -635,18 +635,18 @@ class Question(Resource):
                     new_question_object['type'] = row[3]
                     new_question_object['questionText'] = row[4]
 
-                query = f"SELECT * FROM `image` WHERE `imageID` = '{new_question_object['imageID']}'"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT * FROM `image` WHERE `imageID` = %s"
+                result = get_from_db(query, new_question_object['imageID'], conn, cursor)
                 for row in result:
                     new_question_object['imageLocation'] = IMG_RETRIEVE_FOLDER + row[1] if row and row[1] else None
 
-                query = f"SELECT * FROM `audio` WHERE `audioID` = '{new_question_object['audioID']}'"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT * FROM `audio` WHERE `audioID` = %s"
+                result = get_from_db(query, new_question_object['audioID'], conn, cursor)
                 for row in result:
                     new_question_object['audioLocation'] = AUD_RETRIEVE_FOLDER + row[1] if row and row[1] else None
 
-                query = f"SELECT * FROM `answer` WHERE `questionID` = '{new_question_object['questionID']}'"
-                result = get_from_db(query, None, conn, cursor)
+                query = "SELECT * FROM `answer` WHERE `questionID` = %s"
+                result = get_from_db(query, new_question_object['questionID'], conn, cursor)
                 new_question_object['answers'] = []
                 for row in result:
                     new_question_object['answers'].append(row[1])
