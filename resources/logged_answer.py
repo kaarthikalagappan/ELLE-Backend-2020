@@ -80,11 +80,15 @@ class LoggedAnswer(Resource):
             if not data['moduleID'] or data['moduleID'] == "":
                 module_exp = "REGEXP '.*'"
             else:
+                data['moduleID'] = data['moduleID'].split("'")
+                data['moduleID'] = data['moduleID'][0]
                 module_exp = " = " + str(data['moduleID'])
             
             if not data['sessionID'] or data['sessionID'] == "":
                 sessionID = "REGEXP '.*'"
             else:
+                data['sessionID'] = data['sessionID'].split("'")
+                data['sessionID'] = data['sessionID'][0]
                 sessionID = " = " + str(data['sessionID'])
             
             #TODO: STUDENT USERS CAN ONLY PULL THEIR OWN RECORDS, ONLY ADMINS AND SUPER USERS
@@ -92,12 +96,12 @@ class LoggedAnswer(Resource):
             if (not data['userID'] or data['userID'] == "") and (permission == 'pf' or permission == 'su'):
                 user_exp = "REGEXP '.*'"
             elif (permission == 'pf' or permission == 'su'):
-                user_exp = " = " + str(data['userID'])
+                user_exp = " = " + int(data['userID'])
             else:
-                user_exp = " = " + str(user_id)
+                user_exp = " = " + int(user_id)
             
-            get_questions_query = "SELECT DISTINCT `sessionID` FROM `session` WHERE `moduleID` %s AND userID %s AND sessionID %s"
-            session_id_list = get_from_db(get_questions_query, (module_exp, user_exp, sessionID), conn, cursor)
+            get_questions_query = f"SELECT DISTINCT `sessionID` FROM `session` WHERE `moduleID` {module_exp} AND userID {user_exp} AND sessionID {sessionID}"
+            session_id_list = get_from_db(get_questions_query, None, conn, cursor)
 
             get_logged_answer_query = "SELECT `logged_answer`.*, `term`.`front` FROM `logged_answer` \
                                     INNER JOIN `term` ON `term`.`termID` = `logged_answer`.`termID` \
