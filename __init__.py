@@ -29,7 +29,6 @@ from resources.stats import (ModuleReport, ModuleStats, PlatformStats,
 from resources.access import Access
 from resources.group import (Group, GroupRegister, SearchUserGroups, 
 							 UsersInGroup, GenerateGroupCode)
-from resources.game_logs import GameLog
 from resources.logged_answer import LoggedAnswer, GetLoggedAnswerCSV
 import os.path
 import config
@@ -140,7 +139,7 @@ api.add_resource(LoggedAnswer, API_ENDPOINT_PREFIX+'loggedanswer')
 api.add_resource(Session, API_ENDPOINT_PREFIX+'session')
 api.add_resource(SearchSessions, API_ENDPOINT_PREFIX+'searchsessions')
 api.add_resource(End_Session, API_ENDPOINT_PREFIX+'endsession')
-api.add_resource(GameLog, API_ENDPOINT_PREFIX+'gamelog')
+# api.add_resource(GameLog, API_ENDPOINT_PREFIX+'gamelog')
 api.add_resource(ModuleReport, API_ENDPOINT_PREFIX+'modulereport')
 api.add_resource(ModuleStats, API_ENDPOINT_PREFIX+'modulestats')
 api.add_resource(PlatformStats, API_ENDPOINT_PREFIX+'platformstats')

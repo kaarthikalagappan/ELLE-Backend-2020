@@ -373,24 +373,30 @@ class GetSessionCSV(Resource):
                     # as cached (meaning nothing that we cached has changed).
                     csv = redis_sesssions_csv
                     query = f"""
-                        SELECT `session`.*, `user`.`username`, `module`.`name` FROM `session` 
+                        SELECT `session`.*, `user`.`username`, `module`.`name`, COUNT(`logged_answer`.`logID`) FROM `session`
+                        LEFT JOIN `logged_answer` ON `logged_answer`.`sessionID` = `session`.`sessionID`
                         INNER JOIN `user` ON `user`.`userID` = `session`.`userID`
                         INNER JOIN `module` on `module`.`moduleID` = `session`.`moduleID`
                         WHERE `session`.`sessionID` > {redis_lastseen_sessionID}
+                        GROUP BY `session`.`sessionID`
                         """
                 else:
-                    csv = 'Session ID, User ID, User Name, Module ID, Deleted Module ID, Module Name, Session Date, Player Score, Start Time, End Time, Time Spent, Platform, Mode\n'
+                    csv = 'Session ID, User ID, User Name, Module ID, Deleted Module ID, Module Name, Session Date, Player Score, Total Attempted Questions, Percentage Correct, Start Time, End Time, Time Spent, Platform, Mode\n'
                     query = """
-                            SELECT `session`.*, `user`.`username`, `module`.`name` FROM `session`
+                            SELECT `session`.*, `user`.`username`, `module`.`name`, COUNT(`logged_answer`.`logID`) FROM `session`
+                            LEFT JOIN `logged_answer` ON `logged_answer`.`sessionID` = `session`.`sessionID`
                             INNER JOIN `user` ON `user`.`userID` = `session`.`userID`
                             INNER JOIN `module` on `module`.`moduleID` = `session`.`moduleID`
+                            GROUP BY `session`.`sessionID`
                             """
             else:
-                csv = csv = 'Session ID, User ID, User Name, Module ID, Deleted Module ID, Module Name, Session Date, Player Score, Start Time, End Time, Time Spent, Platform, Mode\n'
+                csv = csv = 'Session ID, User ID, User Name, Module ID, Deleted Module ID, Module Name, Session Date, Player Score, Total Attempted Questions, Percentage Correct, Start Time, End Time, Time Spent, Platform, Mode\n'
                 query = """
-                        SELECT `session`.*, `user`.`username`, `module`.`name` FROM `session` 
+                        SELECT `session`.*, `user`.`username`, `module`.`name`, COUNT(`logged_answer`.`logID`) FROM `session` 
+                        LEFT JOIN `logged_answer` ON `logged_answer`.`sessionID` = `session`.`sessionID`
                         INNER JOIN `user` ON `user`.`userID` = `session`.`userID`
                         INNER JOIN `module` on `module`.`moduleID` = `session`.`moduleID`
+                        GROUP BY `session`.`sessionID`
                         """
             
             get_max_session_count = "SELECT COUNT(session.sessionID) FROM session"
@@ -438,8 +444,8 @@ class GetSessionCSV(Resource):
                         replace_query = "SELECT `name` FROM `deleted_module` WHERE `moduleID` = %s"
                         replace = get_from_db(replace_query, record[9])
                         record[11] = replace[0][0]
-                    # csv = 'Session ID, User ID, User Name, Module ID, Module Name, Session Date, Player Score, Start Time, End Time, Time Spent, Platform, Mode\n'
-                    csv = csv + f"""{record[0]}, {record[1]}, {record[10]}, {record[2]}, {record[9]}, {record[11]}, {record[3]}, {record[4]}, {getTimeDiffFormatted(time_obj = record[5])[0]}, {getTimeDiffFormatted(time_obj = record[6])[0] if record[6] else None}, {time_spent}, {platform}, {record[8]}\n"""
+                    # csv = 'Session ID, User ID, User Name, Module ID, Deleted Module ID, Module Name, Session Date, Player Score, Percentage Correct, Total Attempted Questions, Start Time, End Time, Time Spent, Platform, Mode\n'
+                    csv = csv + f"""{record[0]}, {record[1]}, {record[10]}, {record[2]}, {record[9]}, {record[11]}, {record[3]}, {record[4]}, {record[12]}, {record[4]/record[12] if record[12] != 0 and record[12] and record[4] else None},{getTimeDiffFormatted(time_obj = record[5])[0]}, {getTimeDiffFormatted(time_obj = record[6])[0] if record[6] else None}, {time_spent}, {platform}, {record[8]}\n"""
                 if redis_conn:
                     redis_conn.set('sessions_csv', csv)
                     redis_conn.set('sessions_checksum', chksum_session)

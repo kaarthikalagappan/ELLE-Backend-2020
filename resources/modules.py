@@ -273,8 +273,11 @@ class ModuleQuestions(Resource):
                     '''
             result = get_from_db(query, question_id)
             question['answers'] = []
+            get_tags = """SELECT `tag`.`tagName` FROM `tag` WHERE `tag`.`termID`= %s"""
+
             # Attaching variable names to terms
             for row in result:
+                associated_tags = get_from_db(get_tags, row[0])
                 term = {}
                 term['termID'] = row[0]
                 term['imageLocation'] = getImageLocation(row[1])
@@ -284,6 +287,10 @@ class ModuleQuestions(Resource):
                 term['type'] = row[5]
                 term['gender'] = row[6]
                 term['language'] = row[7]
+                if associated_tags and associated_tags[0]:
+                    term['tags'] = associated_tags[0]
+                else:
+                    term['tags'] = []
                 question['answers'].append(term)
         return questions
 

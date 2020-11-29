@@ -45,7 +45,7 @@ You can find the documentation for all available APIs here: https://documenter.g
 #### SQL queries
 * SQL keywords in capital letters
 * Backticks around identifiers
-* f-Strings when possible
+* Use `%s` in your query strings whenever possible as opposed to using f-strings. That avoids any chances of SQL injections
 #### Functions
 * Use camelCase
 #### Variables

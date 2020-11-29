@@ -185,7 +185,7 @@ class UserLogin(Resource):
             find_user, user = find_by_name(data['username'])
             if find_user:
                 if check_password_hash(user[2], data['password']):
-                    expires = datetime.timedelta(days=14)
+                    expires = datetime.timedelta(hours=18)
                     user_obj = UserObject(user_id=user[0], permissionGroup=user[4])
                     access_token = create_access_token(identity=user_obj, expires_delta=expires)
                     refresh_token = create_refresh_token(identity=user_obj)
@@ -231,6 +231,12 @@ class UserRegister(Resource):
             find_user, user = find_by_name(data['username'])
             if find_user == True:
                 raise CustomException("Username already exists.", 401)
+
+            if len(data['username']) > 20:
+                raise CustomException("Username should be less than 20 characters", 400)
+            if CheckIfStrHasNum(data['username']) == False:
+                raise CustomException("Username should contain at least one number", 400)
+
 
             if not data['email']:
                 data['email'] = ''
@@ -609,7 +615,7 @@ class OTCLogin(Resource):
             else:
                 raise CustomException("Invalid otc", 400)
 
-            expires = datetime.timedelta(days=14)
+            expires = datetime.timedelta(hours=18)
             user_obj = UserObject(user_id=results[0][0], permissionGroup=results[0][4])
             access_token = create_access_token(identity=user_obj, expires_delta=expires)
             refresh_token = create_refresh_token(identity=user_obj)
