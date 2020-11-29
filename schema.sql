@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost
--- Generation Time: Nov 21, 2020 at 06:07 PM
+-- Generation Time: Nov 26, 2020 at 12:49 AM
 -- Server version: 5.7.28
 -- PHP Version: 7.2.30
 
@@ -20,19 +20,6 @@ SET time_zone = "+00:00";
 --
 -- Database: `elle_new_database`
 --
-
--- --------------------------------------------------------
-
---
--- Table structure for table `alternate_form`
---
-
-CREATE TABLE `alternate_form` (
-  `formID` int(11) NOT NULL,
-  `termID` int(11) DEFAULT NULL,
-  `type` varchar(2) DEFAULT NULL,
-  `front` varchar(50) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -99,23 +86,6 @@ CREATE TABLE `deleted_term` (
   `type` varchar(2) CHARACTER SET utf8 COLLATE utf8_unicode_ci DEFAULT NULL,
   `gender` enum('F','M','N') CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL DEFAULT 'N',
   `LANGUAGE` varchar(2) CHARACTER SET utf8 COLLATE utf8_unicode_ci DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=latin1;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `game_log`
---
-
-CREATE TABLE `game_log` (
-  `logID` int(11) NOT NULL,
-  `userID` int(11) DEFAULT NULL,
-  `moduleID` int(11) DEFAULT NULL,
-  `correct` int(11) DEFAULT NULL,
-  `incorrect` int(11) DEFAULT NULL,
-  `platform` varchar(3) DEFAULT NULL,
-  `time` timestamp NULL DEFAULT NULL,
-  `gameName` varchar(25) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
@@ -312,13 +282,6 @@ CREATE TABLE `user_preferences` (
 --
 
 --
--- Indexes for table `alternate_form`
---
-ALTER TABLE `alternate_form`
-  ADD PRIMARY KEY (`formID`),
-  ADD KEY `termID` (`termID`);
-
---
 -- Indexes for table `answer`
 --
 ALTER TABLE `answer`
@@ -353,14 +316,6 @@ ALTER TABLE `deleted_term`
   ADD PRIMARY KEY (`termID`),
   ADD KEY `term_ibfk_1` (`imageID`),
   ADD KEY `term_ibfk_2` (`audioID`);
-
---
--- Indexes for table `game_log`
---
-ALTER TABLE `game_log`
-  ADD PRIMARY KEY (`logID`),
-  ADD KEY `userID` (`userID`),
-  ADD KEY `moduleID` (`moduleID`);
 
 --
 -- Indexes for table `group`
@@ -462,12 +417,6 @@ ALTER TABLE `user_preferences`
 --
 
 --
--- AUTO_INCREMENT for table `alternate_form`
---
-ALTER TABLE `alternate_form`
-  MODIFY `formID` int(11) NOT NULL AUTO_INCREMENT;
-
---
 -- AUTO_INCREMENT for table `audio`
 --
 ALTER TABLE `audio`
@@ -490,12 +439,6 @@ ALTER TABLE `deleted_question`
 --
 ALTER TABLE `deleted_term`
   MODIFY `termID` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `game_log`
---
-ALTER TABLE `game_log`
-  MODIFY `logID` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `group`
@@ -562,12 +505,6 @@ ALTER TABLE `user_preferences`
 --
 
 --
--- Constraints for table `alternate_form`
---
-ALTER TABLE `alternate_form`
-  ADD CONSTRAINT `alternate_form_ibfk_1` FOREIGN KEY (`termID`) REFERENCES `term` (`termID`) ON DELETE CASCADE;
-
---
 -- Constraints for table `answer`
 --
 ALTER TABLE `answer`
@@ -593,13 +530,6 @@ ALTER TABLE `deleted_question`
 ALTER TABLE `deleted_term`
   ADD CONSTRAINT `deleted_term_ibfk_1` FOREIGN KEY (`imageID`) REFERENCES `image` (`imageID`) ON DELETE SET NULL ON UPDATE SET NULL,
   ADD CONSTRAINT `deleted_term_ibfk_2` FOREIGN KEY (`audioID`) REFERENCES `audio` (`audioID`) ON DELETE SET NULL ON UPDATE SET NULL;
-
---
--- Constraints for table `game_log`
---
-ALTER TABLE `game_log`
-  ADD CONSTRAINT `game_log_ibfk_1` FOREIGN KEY (`userID`) REFERENCES `user` (`userID`),
-  ADD CONSTRAINT `game_log_ibfk_2` FOREIGN KEY (`moduleID`) REFERENCES `module` (`moduleID`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `group_module`

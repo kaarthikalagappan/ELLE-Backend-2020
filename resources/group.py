@@ -31,7 +31,7 @@ class Group(Resource):
 
             # Checks if the groupName already exists
             dupe_query = "SELECT `groupID` FROM `group` WHERE `groupName`= %s"
-            dupe_results = get_from_db(dupe_query, data['groupName'], conn, cursor)
+            dupe_results = getFromDB(dupe_query, data['groupName'], conn, cursor)
 
             if dupe_results:
                 raise CustomException("groupName already exists.", 400)
@@ -40,21 +40,21 @@ class Group(Resource):
                 # String must be unique for each class
                 group_code = groupCodeGenerator()
                 gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`= %s"
-                gc_results = get_from_db(gc_query, group_code, conn, cursor)
+                gc_results = getFromDB(gc_query, group_code, conn, cursor)
 
                 if gc_results:
                     raise CustomException("groupCode already exists", 400)
 
                 query = "INSERT INTO `group` (`groupName`, `groupCode`) VALUES (%s, %s)"
-                post_to_db(query, (data['groupName'], group_code), conn, cursor)
+                postToDB(query, (data['groupName'], group_code), conn, cursor)
 
                 g_query = "SELECT `groupID` FROM `group` WHERE `groupName`= %s"
-                g_results = get_from_db(g_query, data['groupName'], conn, cursor)
+                g_results = getFromDB(g_query, data['groupName'], conn, cursor)
                 group_id = g_results[0][0]
 
                 # Users who creates a class have their accesLevel default to 'pf'
                 gu_query = "INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES (%s, %s, %s)"
-                post_to_db(gu_query, (user_id, group_id, 'pf'), conn, cursor)
+                postToDB(gu_query, (user_id, group_id, 'pf'), conn, cursor)
 
                 raise ReturnSuccess("Successfully created the class.", 200)
         except CustomException as error:
@@ -100,7 +100,7 @@ class Group(Resource):
             # Checking groupName and make sure it is unique
             if data['groupName'] is not None:
                 gn_query = "SELECT `groupID` FROM `group` WHERE `groupName`= %s"
-                gn_results = get_from_db(gn_query, data['groupName'], conn, cursor)
+                gn_results = getFromDB(gn_query, data['groupName'], conn, cursor)
             
                 if gn_results:
                     raise CustomException("groupName already in use.", 400)
@@ -108,20 +108,20 @@ class Group(Resource):
             # Checking groupCode and make sure it is unique
             if data['groupCode'] is not None:
                 gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`= %s"
-                gc_results = get_from_db(gc_query, data['groupCode'], conn, cursor)
+                gc_results = getFromDB(gc_query, data['groupCode'], conn, cursor)
             
                 if gc_results:
                     raise CustomException("groupCode already in use.", 400)
         
             if data['groupCode'] is not None and data['groupName'] is None:
                 query = "UPDATE `group` SET `groupCode`= %s WHERE `groupID`= %s"
-                results = post_to_db(query, (data['groupCode'], data['groupID']), conn, cursor)
+                results = postToDB(query, (data['groupCode'], data['groupID']), conn, cursor)
             elif data['groupCode'] is None and data['groupName'] is not None:
                 query = "UPDATE `group` SET `groupName`= %s WHERE `groupID`= %s"
-                results = post_to_db(query, (data['groupName'], data['groupID']), conn, cursor)
+                results = postToDB(query, (data['groupName'], data['groupID']), conn, cursor)
             elif data['groupCode'] is not None and data['groupName'] is not None:
                 query = "UPDATE `group` SET `groupName`= %s, `groupCode`= %s WHERE `groupID`= %s"
-                results = post_to_db(query, (data['groupName'], data['groupCode'], data['groupID']), conn, cursor)
+                results = postToDB(query, (data['groupName'], data['groupCode'], data['groupID']), conn, cursor)
             else:
                 raise ReturnSuccess("No values passed in, nothing changed.", 200)
 
@@ -159,7 +159,7 @@ class Group(Resource):
                 raise CustomException("Invalid permissions.", 400)
 
             query = "DELETE FROM `group` WHERE `groupID` = %s"
-            delete_from_db(query, data['groupID'], conn, cursor)
+            deleteFromDB(query, data['groupID'], conn, cursor)
         
             raise ReturnSuccess("Successfully deleted group.", 200)
         except CustomException as error:
@@ -195,7 +195,7 @@ class GroupRegister(Resource):
                 return CustomException("Superadmins cannot register for classes."), 400
 
             query = "SELECT `groupID` FROM `group` WHERE `groupCode` = %s"
-            results = get_from_db(query, data['groupCode'], conn, cursor)
+            results = getFromDB(query, data['groupCode'], conn, cursor)
 
             # if groupCode exists in group table
             if results:
@@ -204,13 +204,13 @@ class GroupRegister(Resource):
                 # Check if the user has already registered for the group
                 # otherwise continue with registering the user for the group
                 dupe_query = "SELECT `userID` FROM `group_user` WHERE `groupID`= %s AND `userID`= %s"
-                dupe_results = get_from_db(dupe_query, (group_id, user_id), conn, cursor)
+                dupe_results = getFromDB(dupe_query, (group_id, user_id), conn, cursor)
 
                 if dupe_results:
                     raise CustomException("User has already registered for the class.", 207)
                 else:
                     gu_query = "INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES (%s, %s, %s)"
-                    post_to_db(gu_query, (user_id, group_id, permission), conn, cursor)
+                    postToDB(gu_query, (user_id, group_id, permission), conn, cursor)
             else:
                 raise CustomException("Invalid class code.", 206)
 
@@ -247,7 +247,7 @@ class SearchUserGroups(Resource):
                      INNER JOIN `group_user` \
                      ON `group_user`.`groupID` = `group`.`groupID` \
                      WHERE `group_user`.`userID` = %s" 
-            results = get_from_db(query, user_id, conn, cursor)
+            results = getFromDB(query, user_id, conn, cursor)
             
             # Get all users in the group
             get_group_users_query = "SELECT `user`.`userID`, `user`.`username`, `group_user`.`accessLevel` \
@@ -263,7 +263,7 @@ class SearchUserGroups(Resource):
 
                     if permission == 'pf' or permission == 'su':
                         group_users = []
-                        group_users_from_db = get_from_db(get_group_users_query, group_obj['groupID'], conn, cursor)
+                        group_users_from_db = getFromDB(get_group_users_query, group_obj['groupID'], conn, cursor)
                         for indv_group_user in group_users_from_db:
                             group_users.append(convertUsersToJSON(indv_group_user))
                         group_obj['group_users'] = group_users
@@ -309,7 +309,7 @@ class UsersInGroup(Resource):
                      INNER JOIN `user` \
                      ON `user`.`userID` = `group_user`.`userID` \
                      WHERE `group_user`.`groupID` = %s" 
-            results = get_from_db(query, data['groupID'], conn, cursor)
+            results = getFromDB(query, data['groupID'], conn, cursor)
             
             users = []
             if results and results[0]:
@@ -351,7 +351,7 @@ class GenerateGroupCode(Resource):
             group_code = groupCodeGenerator()
             while True:
                 gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`= %s"
-                gc_results = get_from_db(gc_query, group_code, conn, cursor)
+                gc_results = getFromDB(gc_query, group_code, conn, cursor)
 
                 if gc_results:
                     group_code = groupCodeGenerator()
@@ -359,7 +359,7 @@ class GenerateGroupCode(Resource):
                     break
             
             query = "UPDATE `group` SET `groupCode`= %s WHERE `groupID`= %s"
-            results = post_to_db(query, (group_code, data['groupID']), conn, cursor)
+            results = postToDB(query, (group_code, data['groupID']), conn, cursor)
 
             raise ReturnSuccess({"groupCode" : group_code}, 200)
         except CustomException as error:

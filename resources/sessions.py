@@ -55,12 +55,12 @@ class Session(Resource):
             if mode:
                 query = """INSERT INTO `session` (`userID`, `moduleID`, `sessionDate`, `startTime`, `mode`, `platform`)
                         VALUES (%s, %s, %s, %s, %s, %s)"""
-                post_to_db(query, (user_id, moduleID, formatted_date, formatted_time, mode, platform[:3]), conn, cursor)
+                postToDB(query, (user_id, moduleID, formatted_date, formatted_time, mode, platform[:3]), conn, cursor)
                 sessionID = cursor.lastrowid
             else:
                 query = """INSERT INTO `session` (`userID`, `moduleID`, `sessionDate`, `startTime`, `platform`) 
                         VALUES (%s, %s, %s, %s, %s)"""
-                post_to_db(query, (user_id, moduleID, formatted_date, formatted_time, platform[:3]), conn, cursor)
+                postToDB(query, (user_id, moduleID, formatted_date, formatted_time, platform[:3]), conn, cursor)
                 sessionID = cursor.lastrowid
             raise ReturnSuccess({'sessionID' : sessionID}, 201)
         except ReturnSuccess as success:
@@ -94,7 +94,7 @@ class Session(Resource):
             query = """SELECT `session`.*, `module`.`name` FROM `session` 
                     INNER JOIN `module` ON `module`.`moduleID` = `session`.`moduleID` WHERE
                     `session`.`sessionID` = %s"""
-            results = get_from_db(query, sessionID, conn, cursor)
+            results = getFromDB(query, sessionID, conn, cursor)
             if results and results[0]:
                 sessionData['session'].append(convertSessionsToJSON(results[0]))
                 if permission == 'st' and sessionData['session']['userID'] != user_id:
@@ -103,7 +103,7 @@ class Session(Resource):
                 raise CustomException("No sessions found for the given ID", 400)
 
             query = "SELECT * FROM `logged_answer` WHERE `sessionID` = %s"
-            results = get_from_db(query, sessionID, conn, cursor)
+            results = getFromDB(query, sessionID, conn, cursor)
             if results and results[0]:
                 for log in results:
                     record = {
@@ -158,14 +158,14 @@ class End_Session(Resource):
             formatted_time = datetime.datetime.now().time().strftime('%H:%M')
 
             query = "SELECT * FROM `session` WHERE `sessionID` = %s"
-            result = get_from_db(query, sessionID, conn, cursor)
+            result = getFromDB(query, sessionID, conn, cursor)
             if not result or not result[0]:
                 raise CustomException("Session not found for provided ID", 400)
             elif result[0][6]:
                     raise CustomException("Wrong session ID provided", 400)
 
             query = "UPDATE `session` SET `endTime` = %s, `playerScore` = %s WHERE `session`.`sessionID` = %s"
-            post_to_db(query, (formatted_time, playerScore, sessionID), conn, cursor)
+            postToDB(query, (formatted_time, playerScore, sessionID), conn, cursor)
             raise ReturnSuccess("Session successfully ended", 200)
         except ReturnSuccess as success:
             conn.commit()
@@ -256,7 +256,7 @@ class SearchSessions(Resource):
                     AND `session`.`platform` {data['platform']}
                     AND `session`.`sessionDate` {data['sessionDate']}"""
 
-            results = get_from_db(query, None, conn, cursor)
+            results = getFromDB(query, None, conn, cursor)
             records = []
             if results and results[0]:
                 for session in results:
@@ -298,7 +298,7 @@ class GetAllSessions(Resource):
 
             query = """SELECT `session`.*, `module`.`name` FROM `session` 
                     INNER JOIN `module` ON `module`.`moduleID` = `session`.`moduleID`"""
-            results = get_from_db(query, None, conn, cursor)
+            results = getFromDB(query, None, conn, cursor)
             records = []
             if results and results[0]:
                 for session in results:
@@ -345,8 +345,8 @@ class GetSessionCSV(Resource):
 
         get_max_sessionID = "SELECT MAX(`session`.`sessionID`) FROM `session`"
         get_sessions_chksum = "CHECKSUM TABLE `session`"
-        max_sessionID = get_from_db(get_max_sessionID)
-        chksum_session = get_from_db(get_sessions_chksum)
+        max_sessionID = getFromDB(get_max_sessionID)
+        chksum_session = getFromDB(get_sessions_chksum)
         
         if max_sessionID and max_sessionID[0] and chksum_session and chksum_session[0]:
             max_sessionID = str(max_sessionID[0][0])
@@ -359,8 +359,8 @@ class GetSessionCSV(Resource):
                 #if the checksum values don't match, then something changed
                 get_sub_session_count = f"SELECT COUNT(`session`.`sessionID`) FROM `session` WHERE `session`.`sessionID` <= {redis_lastseen_sessionID}"
                 get_all_session_count = f"SELECT COUNT(`session`.`sessionID`) FROM `session`"
-                sub_session_count = get_from_db(get_sub_session_count)
-                all_session_count = get_from_db(get_all_session_count)
+                sub_session_count = getFromDB(get_sub_session_count)
+                all_session_count = getFromDB(get_all_session_count)
 
                 if sub_session_count and sub_session_count[0] and all_session_count and all_session_count[0]:
                     sub_session_count = str(sub_session_count[0][0])
@@ -400,26 +400,26 @@ class GetSessionCSV(Resource):
                         """
             
             get_max_session_count = "SELECT COUNT(session.sessionID) FROM session"
-            max_session_count = get_from_db(get_max_session_count)
+            max_session_count = getFromDB(get_max_session_count)
             if max_session_count and max_session_count[0]:
                 max_session_count = str(max_session_count[0][0])
             else:
                 return errorMessage("Error retrieving data"), 500
             
-            results = get_from_db(query)
+            results = getFromDB(query)
             if results and results[0]:
                 for record in results:
                     if record[6]:
                         time_spent, _ = getTimeDiffFormatted(record[5], record[6])
                     else:
                         log_time_query = "SELECT `logged_answer`.`log_time` FROM `logged_answer` WHERE `sessionID`=%s ORDER BY `logID` DESC LIMIT 1"
-                        last_log_time = get_from_db(log_time_query, record[0])
+                        last_log_time = getFromDB(log_time_query, record[0])
                         if last_log_time and last_log_time[0] and last_log_time[0][0] != None:
                             time_spent, _ = getTimeDiffFormatted(record[5], last_log_time[0][0])
                             record[6], _ = getTimeDiffFormatted(time_obj = last_log_time[0][0])
                             if record[3] != time.strftime("%Y-%m-%d"):
                                 query_update_time = f"UPDATE `session` SET `session`.`endTime` = '{dateTimeToMySQL(last_log_time[0][0])}' WHERE `session`.`sessionID` = {record[0]}"
-                                post_to_db(query_update_time)
+                                postToDB(query_update_time)
                         else:
                             time_spent = None
                     if not record[4]:
@@ -428,7 +428,7 @@ class GetSessionCSV(Resource):
                                                   FROM `logged_answer`
                                                   WHERE `logged_answer`.`sessionID` = %s
                                                   """
-                        answer_data = get_from_db(get_logged_answer_score, record[0])
+                        answer_data = getFromDB(get_logged_answer_score, record[0])
                         if answer_data and answer_data[0]:
                             correct_answers = 0
                             for answer_record in answer_data:
@@ -437,12 +437,12 @@ class GetSessionCSV(Resource):
                                                  UPDATE `session` SET `session`.`playerScore` = %s
                                                  WHERE `session`.`sessionID` = %s
                                                  """
-                            post_to_db(update_score_query, (correct_answers, record[0]))
+                            postToDB(update_score_query, (correct_answers, record[0]))
                             record[4] = correct_answers
                     platform = "Mobile" if record[7] == 'mb' else "PC" if record[7] == 'cp' else "Virtual Reality"
                     if record[2] is None:
                         replace_query = "SELECT `name` FROM `deleted_module` WHERE `moduleID` = %s"
-                        replace = get_from_db(replace_query, record[9])
+                        replace = getFromDB(replace_query, record[9])
                         record[11] = replace[0][0]
                     # csv = 'Session ID, User ID, User Name, Module ID, Deleted Module ID, Module Name, Session Date, Player Score, Percentage Correct, Total Attempted Questions, Start Time, End Time, Time Spent, Platform, Mode\n'
                     csv = csv + f"""{record[0]}, {record[1]}, {record[10]}, {record[2]}, {record[9]}, {record[11]}, {record[3]}, {record[4]}, {record[12]}, {record[4]/record[12] if record[12] != 0 and record[12] and record[4] else None},{getTimeDiffFormatted(time_obj = record[5])[0]}, {getTimeDiffFormatted(time_obj = record[6])[0] if record[6] else None}, {time_spent}, {platform}, {record[8]}\n"""

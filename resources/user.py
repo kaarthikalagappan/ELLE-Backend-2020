@@ -44,7 +44,7 @@ class Users(Resource):
             conn = mysql.connect()
             cursor = conn.cursor()
             query = "SELECT * FROM `user` WHERE `user`.`userID` != %s"
-            result = get_from_db(query, user_id, conn, cursor)
+            result = getFromDB(query, user_id, conn, cursor)
 
             final_list_users = []
             for row in result:
@@ -59,7 +59,7 @@ class Users(Resource):
                                     WHERE `group_user`.`userID`= %s"""
             for user in final_list_users:
                 if user['permissionGroup'] == 'pf':
-                    groups = get_from_db(get_group_query, user['userID'], conn, cursor)
+                    groups = getFromDB(get_group_query, user['userID'], conn, cursor)
                     groups_list = []
                     if groups and groups[0]:
                         for indv_groupID in groups:
@@ -92,7 +92,7 @@ class User(Resource):
             cursor = conn.cursor()
 
             query = "SELECT * FROM `user` WHERE `userID` = %s"
-            result = get_from_db(query, user_id, conn, cursor)
+            result = getFromDB(query, user_id, conn, cursor)
             for row in result:
                 newUserObject = {}
                 newUserObject['id'] = row[0]
@@ -130,7 +130,7 @@ class User(Resource):
             if data['newEmail'] == '':
                 data['newEmail'] = None
             update_email_query = "UPDATE `user` SET `email` = %s WHERE `user`.`userID` = %s"
-            post_to_db(update_email_query, (data['newEmail'], user_id), conn, cursor)
+            postToDB(update_email_query, (data['newEmail'], user_id), conn, cursor)
 
             raise ReturnSuccess("Successfully changed email", 200)
         except CustomException as error:
@@ -160,12 +160,12 @@ class UserLogout(Resource):
         
         jti = get_raw_jwt()['jti']
         query = "INSERT INTO `tokens` VALUES (%s)"
-        post_to_db(query, jti)
+        postToDB(query, jti)
 
         if data['refresh_token']:
             jti = get_jti(data['refresh_token'])
             query = "INSERT INTO `tokens` VALUES (%s)"
-            post_to_db(query, jti)
+            postToDB(query, jti)
 
         return returnMessage("Successfully logged out"), 200
 
@@ -248,22 +248,22 @@ class UserRegister(Resource):
  
             query = "INSERT INTO `user` (`username`, `password`, `permissionGroup`, `email`) VALUES (%s, %s, %s, %s)"
             salted_password = generate_password_hash(data['password'])
-            post_to_db(query, (data['username'], salted_password, 'st', data['email']), conn, cursor)
+            postToDB(query, (data['username'], salted_password, 'st', data['email']), conn, cursor)
 
             query = "SELECT `userID` FROM `user` WHERE `username`= %s"
-            results = get_from_db(query, data['username'], conn, cursor)
+            results = getFromDB(query, data['username'], conn, cursor)
             user_id = results[0][0]
 
             add_preferences = "INSERT INTO `user_preferences` (`userID`) VALUES (%s)"
-            post_to_db(add_preferences, (user_id), conn, cursor)
+            postToDB(add_preferences, (user_id), conn, cursor)
 
             if data['groupCode']:
                 gc_query = "SELECT `groupID` FROM `group` WHERE `groupCode`= %s"
-                results = get_from_db(gc_query, data['groupCode'], conn, cursor)
+                results = getFromDB(gc_query, data['groupCode'], conn, cursor)
                 if results:
                     group_id = results[0][0]
                     gu_query = "INSERT INTO `group_user` (`userID`, `groupID`, `accessLevel`) VALUES (%s, %s, %s)"
-                    post_to_db(gu_query, (user_id, group_id, 'st'), conn, cursor)
+                    postToDB(gu_query, (user_id, group_id, 'st'), conn, cursor)
           
             raise ReturnSuccess("Successfully registered!", 201)
         except CustomException as error:
@@ -293,7 +293,7 @@ class ResetPassword(Resource):
             return errorMessage("Passwords do not match!"), 400
 
         get_associated_user = "SELECT `user`.`userID`, `user`.`pwdResetToken` FROM `user` WHERE `user`.`email` = %s"
-        associated_user = get_from_db(get_associated_user, data['email'].lower())
+        associated_user = getFromDB(get_associated_user, data['email'].lower())
 
         if not associated_user or not associated_user[0] \
            or not associated_user[0][1] \
@@ -306,7 +306,7 @@ class ResetPassword(Resource):
             
             password = generate_password_hash(data['password'])
             query = "UPDATE `user` SET `pwdResetToken` = NULL, `password` = %s WHERE `userID` = %s"
-            post_to_db(query, (password, associated_user[0][0]), conn, cursor)
+            postToDB(query, (password, associated_user[0][0]), conn, cursor)
 
             raise ReturnSuccess("Successfully reset password", 200)
         except CustomException as error:
@@ -338,20 +338,20 @@ class ForgotPassword(Resource):
         returnMessage = {"Message" : "Processed"}
 
         get_user = "SELECT `user`.`userID` FROM `user` WHERE `user`.`email` = %s"
-        associated_user = get_from_db(get_user, data['email'])
+        associated_user = getFromDB(get_user, data['email'])
         if not associated_user or not associated_user[0]:
             return returnMessage, 202
         
         resetToken = otcGenerator(20, string.hexdigits + '!#_@')
         check_token_query = "SELECT `user`.`userID` FROM `user` WHERE `user`.`pwdResetToken` = %s"
-        if_exist = get_from_db(check_token_query, resetToken)
+        if_exist = getFromDB(check_token_query, resetToken)
         while if_exist and if_exist[0]:
             resetToken = otcGenerator(20, string.hexdigits + '!#_@')
             check_token_query = "SELECT `user`.`userID` FROM `user` WHERE `user`.`pwdResetToken` = %s"
-            if_exist = get_from_db(check_token_query, resetToken)
+            if_exist = getFromDB(check_token_query, resetToken)
 
         update_pwdToken_query = "UPDATE `user` SET `pwdResetToken` = %s WHERE `userID` = %s"
-        post_to_db(update_pwdToken_query, (generate_password_hash(resetToken), associated_user[0][0]))
+        postToDB(update_pwdToken_query, (generate_password_hash(resetToken), associated_user[0][0]))
 
         msg = Message("Forgot Password - EndLess Learner",
                     sender="donotreply@endlesslearner.com",
@@ -380,7 +380,7 @@ class ChangePassword(Resource):
 
             if permission == 'pf' and data['userID'] and data['userID'] != '':
                 get_user_status = "SELECT `user`.`permissionGroup` FROM `user` WHERE `user`.`userID` = %s"
-                user_status = get_from_db(get_user_status, data['userID'], conn, cursor)
+                user_status = getFromDB(get_user_status, data['userID'], conn, cursor)
                 if not user_status or not user_status[0]:
                     raise CustomException("Referred user not found", 400)
                 if user_status[0][0] != 'st':
@@ -394,7 +394,7 @@ class ChangePassword(Resource):
  
             password = generate_password_hash(data['password'])
             query = "UPDATE `user` SET `password` = %s WHERE `userID` = %s"
-            post_to_db(query, (password, data['userID']), conn, cursor)
+            postToDB(query, (password, data['userID']), conn, cursor)
           
             raise ReturnSuccess("Successfully reset password", 200)
         except CustomException as error:
@@ -426,7 +426,7 @@ class ForgotUsername(Resource):
         returnMessage = {"Message" : "Processed"}
 
         get_user = "SELECT `user`.`username` FROM `user` WHERE `user`.`email` = %s"
-        username = get_from_db(get_user, data['email'])
+        username = getFromDB(get_user, data['email'])
         if not username or not username[0]:
             return returnMessage, 202
 
@@ -464,14 +464,14 @@ class UsersHighscores(Resource):
             cursor = conn.cursor()
 
             query = "SELECT `userID`,`playerScore` FROM `session` WHERE `moduleID`= %s AND`platform`= %s ORDER BY LENGTH(`playerScore`),`playerScore`"
-            result = get_from_db(query, (data['moduleID'], data['platform']), conn, cursor)
+            result = getFromDB(query, (data['moduleID'], data['platform']), conn, cursor)
             user = []
 
             for row in result:
                 userscores = {}
                 userscores['score'] = row[1]
                 query = "SELECT `username` FROM `user` WHERE `userID`= %s"
-                name = get_from_db(query, row[0], conn, cursor)
+                name = getFromDB(query, row[0], conn, cursor)
                 for row2 in name:
                     userscores['usernames'] = name[0][0]
                 user.append(userscores)
@@ -507,7 +507,7 @@ class UserLevels(Resource):
                      INNER JOIN `group` \
                      ON `group`.groupId = `group_user`.groupID \
                      WHERE `group_user`.userID= %s" 
-            results = get_from_db(query, user_id, conn, cursor)
+            results = getFromDB(query, user_id, conn, cursor)
 
             userLevels = []
             for userLevel in results:
@@ -544,7 +544,7 @@ class GetUsernames(Resource):
             cursor = conn.cursor()
 
             query = "SELECT `username` FROM `user`" 
-            results = get_from_db(query, None, conn, cursor)
+            results = getFromDB(query, None, conn, cursor)
 
             usernames = []
             for username in results:
@@ -579,7 +579,7 @@ class GenerateOTC(Resource):
 
             otc = otcGenerator()
             query = "UPDATE `user` SET `otc`= %s WHERE `userID`= %s"
-            results = post_to_db(query, (otc, user_id), conn, cursor)
+            results = postToDB(query, (otc, user_id), conn, cursor)
 
             raise ReturnSuccess({"otc" : otc}, 200)
         except CustomException as error:
@@ -606,12 +606,12 @@ class OTCLogin(Resource):
             cursor = conn.cursor()
 
             query = "SELECT * FROM `user` WHERE `otc`= %s"
-            results = get_from_db(query, data['otc'], conn, cursor)
+            results = getFromDB(query, data['otc'], conn, cursor)
             
             # Remove the otc from user after logging in
             if results and results[0]:
                 query = "UPDATE `user` SET `otc`= %s WHERE `userID`= %s"
-                post_to_db(query, (None, results[0][0]), conn, cursor)
+                postToDB(query, (None, results[0][0]), conn, cursor)
             else:
                 raise CustomException("Invalid otc", 400)
 
@@ -649,7 +649,7 @@ class User_Preferences(Resource):
             cursor = conn.cursor()
 
             query = "SELECT * from `user_preferences` WHERE `userID` = %s"
-            user_preference = get_from_db(query, user_id, conn, cursor)
+            user_preference = getFromDB(query, user_id, conn, cursor)
             if not user_preference or not user_preference[0]:
                 return errorMessage("An error occured"), 500
             raise ReturnSuccess(userPreferencesToJSON(user_preference[0]), 200)
@@ -687,7 +687,7 @@ class User_Preferences(Resource):
             cursor = conn.cursor()
 
             update_query = "UPDATE `user_preferences` SET `preferredHand` = %s, `vrGloveColor` = %s WHERE `user_preferences`.`userID` = %s"
-            post_to_db(update_query, (data['preferredHand'], data['vrGloveColor'], user_id), conn, cursor)
+            postToDB(update_query, (data['preferredHand'], data['vrGloveColor'], user_id), conn, cursor)
             
             raise ReturnSuccess("Successfully updated preferences", 200)
         except CustomException as error:
@@ -715,7 +715,7 @@ class Refresh(Resource):
 
             user_id = get_jwt_identity()
             query = "SELECT `permissionGroup`, `email` FROM `user` WHERE `userID`= %s"
-            permission = get_from_db(query, user_id, conn, cursor)
+            permission = getFromDB(query, user_id, conn, cursor)
             user_obj = UserObject(user_id=user_id, permissionGroup=permission[0][0])
             raise ReturnSuccess({'access_token': create_access_token(identity=user_obj), 'user_id' : user_id }, 200)
         except CustomException as error:

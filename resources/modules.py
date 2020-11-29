@@ -33,7 +33,7 @@ class Modules(Resource):
                 LEFT JOIN `group_module` ON `module`.`moduleID` = `group_module`.`moduleID` 
                 LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
                 """
-            result = get_from_db(query)
+            result = getFromDB(query)
         else:
             query = """
                     SELECT DISTINCT `module`.* FROM `module` 
@@ -41,7 +41,7 @@ class Modules(Resource):
                     INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
                     WHERE `group_user`.`userID`=%s
                     """
-            result = get_from_db(query, user_id)
+            result = getFromDB(query, user_id)
 
         modules = []
         for row in result:
@@ -72,7 +72,7 @@ class RetrieveGroupModules(Resource):
                 ON `group_module`.`moduleID` = `module`.`moduleID` 
                 WHERE `group_module`.`groupID`=%s
                 """
-        records = get_from_db(query, group_id)
+        records = getFromDB(query, group_id)
         modules = []
         for row in records:
             modules.append(convertModuleToJSON(row)) 
@@ -101,7 +101,7 @@ class SearchModules(Resource):
                 INNER JOIN `group_module` ON `group_module`.`moduleID` = `module`.`moduleID` 
                 WHERE `module`.`language`=%s
                 """
-        records = get_from_db(query, data['language'])
+        records = getFromDB(query, data['language'])
         modules = []
         for row in records:
             modules.append(convertModuleToJSON(row, 'groupID')) 
@@ -139,7 +139,7 @@ class RetrieveUserModules(Resource):
                     WHERE `group_user`.`userID`=%s
                     GROUP BY `module`.`moduleID`
                     """
-            result = get_from_db(query, user_id)
+            result = getFromDB(query, user_id)
 
             modules = []
             for row in result:
@@ -155,7 +155,7 @@ class RetrieveUserModules(Resource):
                     LEFT JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID`
                     GROUP BY `module`.`moduleID`
                     """
-            result = get_from_db(query)
+            result = getFromDB(query)
         else:
             query = """
                     SELECT DISTINCT `module`.*, GROUP_CONCAT(DISTINCT `group_module`.`groupID`) FROM `module` 
@@ -164,7 +164,7 @@ class RetrieveUserModules(Resource):
                     WHERE `group_user`.`userID`=%s OR `module`.`userID`=%s
                     GROUP BY `module`.`moduleID`
                     """
-            result = get_from_db(query, (user_id, user_id))
+            result = getFromDB(query, (user_id, user_id))
 
         modules = []
         for row in result:
@@ -218,7 +218,7 @@ class RetrieveAllModules(Resource):
 
         # Query to retrieve all modules
         query = f"SELECT `module`.*, `user`.`userName` FROM `module` INNER JOIN `user` ON `user`.`userID` = `module`.`userID`"
-        result = get_from_db(query)
+        result = getFromDB(query)
         
         # Attaching variable names to rows
         modules = []
@@ -251,7 +251,7 @@ class ModuleQuestions(Resource):
                 WHERE `module_question`.`moduleID` = %s
                 AND `module_question`.`questionID` = `question`.`questionID`;
                 '''
-        result = get_from_db(query, module_id)
+        result = getFromDB(query, module_id)
         # Attaching variable names to rows
         questions = []
         for row in result:
@@ -271,13 +271,13 @@ class ModuleQuestions(Resource):
                     WHERE `answer`.`questionID` = %s
                     AND `answer`.`termID` = `term`.`termID`;
                     '''
-            result = get_from_db(query, question_id)
+            result = getFromDB(query, question_id)
             question['answers'] = []
             get_tags = """SELECT `tag`.`tagName` FROM `tag` WHERE `tag`.`termID`= %s"""
 
             # Attaching variable names to terms
             for row in result:
-                associated_tags = get_from_db(get_tags, row[0])
+                associated_tags = getFromDB(get_tags, row[0])
                 term = {}
                 term['termID'] = row[0]
                 term['imageLocation'] = getImageLocation(row[1])
@@ -318,7 +318,7 @@ class Module(Resource):
                 INNER JOIN `group_user` ON `group_module`.`groupID` = `group_user`.`groupID` 
                 WHERE `group_user`.`userID` = %s AND `module`.`moduleID`= %s
                 '''
-        result = get_from_db(query, (user_id, module_id))
+        result = getFromDB(query, (user_id, module_id))
 
         module = None
 
@@ -373,10 +373,10 @@ class Module(Resource):
                     INSERT INTO module (name, language, complexity, userID)
                     VALUES (%s, %s, %s, %s);
                     """
-            post_to_db(query, (name, language, complexity, user_id))
+            postToDB(query, (name, language, complexity, user_id))
 
             query = "SELECT MAX(moduleID) from module"
-            moduleID = get_from_db(query) #ADD A CHECK TO SEE IF IT RETURNED SUCCESSFULLY
+            moduleID = getFromDB(query) #ADD A CHECK TO SEE IF IT RETURNED SUCCESSFULLY
 
             if not moduleID or not moduleID[0]:
                 raise CustomException("Error in creating a module", 500)
@@ -385,7 +385,7 @@ class Module(Resource):
                 # Linking the newly created module to the group associated with the groupID            
                 query = """INSERT INTO `group_module` (`moduleID`, `groupID`) 
                         VALUES (%s, %s)"""
-                post_to_db(query, (moduleID[0][0], group_id))
+                postToDB(query, (moduleID[0][0], group_id))
 
             raise ReturnSuccess({"moduleID" : moduleID[0][0]}, 200)
         except CustomException as error:
@@ -441,10 +441,10 @@ class Module(Resource):
                     SET `name` = %s, `language` = %s, `complexity` = %s
                     WHERE `moduleID` = %s;
                     """
-            post_to_db(query, (name, language, complexity, module_id))
+            postToDB(query, (name, language, complexity, module_id))
 
             query = "SELECT * FROM `module` WHERE `moduleID` = %s"
-            results = get_from_db(query, data['moduleID'])
+            results = getFromDB(query, data['moduleID'])
             if not results or not results[0]:
                 raise CustomException("Non existant module", 400)
 
@@ -492,7 +492,7 @@ class Module(Resource):
             return errorMessage('Please provide the id of a module.'), 400
         
         query = "SELECT `module`.`userID` FROM `module` WHERE `module`.`moduleID` = %s"
-        module_user_id = get_from_db(query, module_id)
+        module_user_id = getFromDB(query, module_id)
         if not module_user_id or not module_user_id[0]:
             return errorMessage('Invalid module ID'), 400
         
@@ -508,25 +508,25 @@ class Module(Resource):
 
             # Get module's data
             module_query = "SELECT * FROM `module` WHERE `moduleID` = %s"
-            module_data = get_from_db(module_query, module_id, conn, cursor)
+            module_data = getFromDB(module_query, module_id, conn, cursor)
 
             # Move to the deleted_module table
             delete_query = """INSERT INTO `deleted_module` (`moduleID`, `name`, `language`, `complexity`, `userID`) 
                            VALUES (%s, %s, %s, %s, %s)"""
-            post_to_db(delete_query, (module_data[0][0], module_data[0][1], module_data[0][2], module_data[0][3], module_data[0][4]), conn, cursor)
+            postToDB(delete_query, (module_data[0][0], module_data[0][1], module_data[0][2], module_data[0][3], module_data[0][4]), conn, cursor)
 
             # Get all sessions that were associated to the question
             s_query = "SELECT `sessionID` FROM `session` WHERE `moduleID` = %s"
-            s_results = get_from_db(s_query, module_data[0][0], conn, cursor)
+            s_results = getFromDB(s_query, module_data[0][0], conn, cursor)
 
             # Update sessions
             for session in s_results:
                 session_query = 'UPDATE `session` SET `moduleID` = NULL, `deleted_moduleID` = %s WHERE `sessionID` = %s'
-                post_to_db(session_query, (module_data[0][0], session[0]), conn, cursor)
+                postToDB(session_query, (module_data[0][0], session[0]), conn, cursor)
 
             # Deleting module
             query = f"DELETE FROM `module` WHERE `moduleID` = {module_id}"
-            post_to_db(query, None, conn, cursor)
+            postToDB(query, None, conn, cursor)
 
             raise ReturnSuccess('Successfully deleted module!', 200)
         except CustomException as error:
@@ -620,20 +620,20 @@ class AttachTerm(Resource):
                     AND `answer`.`termID` = %s
                     AND `question`.`type` = "MATCH"
                     '''
-            result = get_from_db(query, term_id)
+            result = getFromDB(query, term_id)
             # If term or match question does not exist
             question_id = -1
             if not result or not result[0]:
                 # Determining if term exists
-                result = get_from_db("SELECT front FROM term WHERE termID = %s", term_id)
+                result = getFromDB("SELECT front FROM term WHERE termID = %s", term_id)
                 if result and result[0]:
                     front = result[0]
                     # Creating a new MATCH question if missing (Only occurs for terms manually created through SQL)
-                    post_to_db(''' INSERT INTO question (`type`, `questionText`) VALUES ("MATCH", "What is the translation of %s?")''', front)
+                    postToDB(''' INSERT INTO question (`type`, `questionText`) VALUES ("MATCH", "What is the translation of %s?")''', front)
                     query = "SELECT MAX(questionID) FROM question"
-                    id_result = get_from_db(query)
+                    id_result = getFromDB(query)
                     question_id = check_max_id(id_result) - 1
-                    post_to_db("INSERT INTO answer (`questionID`, `termID`) VALUES (%s, %s)", (question_id, term_id))
+                    postToDB("INSERT INTO answer (`questionID`, `termID`) VALUES (%s, %s)", (question_id, term_id))
                 else:
                     raise CustomException('Term does not exist or MATCH question has been deleted internally.', 400)
             # Getting question id if question already existed
@@ -687,7 +687,7 @@ class AddModuleGroup(Resource):
                     SELECT 1 FROM `group_module` WHERE moduleID = %s
                     AND groupID = %s
                     """
-            exisistingRecord = get_from_db(query, (data['moduleID'], data['groupID']), conn, cursor)
+            exisistingRecord = getFromDB(query, (data['moduleID'], data['groupID']), conn, cursor)
 
             # They module is already in the group, so unlink them
             if exisistingRecord and exisistingRecord[0]:
@@ -695,7 +695,7 @@ class AddModuleGroup(Resource):
                               DELETE from `group_module` WHERE moduleID = %s
                               AND groupID = %s
                               """
-                post_to_db(deleteQuery, (data['moduleID'], data['groupID']), conn, cursor)
+                postToDB(deleteQuery, (data['moduleID'], data['groupID']), conn, cursor)
                 raise ReturnSuccess("Successfully unlinked them", 200)
             
             # They aren't already linked so link them
@@ -704,7 +704,7 @@ class AddModuleGroup(Resource):
                               INSERT INTO `group_module` (`moduleID`, `groupID`)
                               VALUES (%s, %s)	
                               """
-                post_to_db(insertQuery, (data['moduleID'], data['groupID']), conn, cursor)
+                postToDB(insertQuery, (data['moduleID'], data['groupID']), conn, cursor)
                 raise ReturnSuccess("Successfully added module to group", 200)
             
             raise CustomException("Something went wrong when trying to un/link the module to the group", 500)

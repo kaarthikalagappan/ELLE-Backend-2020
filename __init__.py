@@ -94,7 +94,7 @@ class HomePage(Resource):
 def check_if_token_in_blacklist(decrypted_token):
     jti = decrypted_token['jti']
     query = f"SELECT * FROM `tokens` WHERE `expired` = '{jti}'"
-    result = get_from_db(query)
+    result = getFromDB(query)
     if result and result[0]:
     	return True
     else:

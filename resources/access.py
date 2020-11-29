@@ -70,7 +70,7 @@ class Access(Resource):
                 query = f"""UPDATE `user` SET `permissionGroup` = '{data['accessLevel']}' 
                         WHERE `userID` = {int(data['userID'])}"""
             
-            post_to_db(query, None, conn, cursor)
+            postToDB(query, None, conn, cursor)
             
             raise ReturnSuccess("Successfully changed permission", 200)
         except CustomException as error:

@@ -27,7 +27,7 @@ from config import (IMAGE_EXTENSIONS, AUDIO_EXTENSIONS, TEMP_DELETE_FOLDER,
 def check_if_term_exists(_id):
 
     query = "SELECT * FROM term WHERE termID = %s"
-    result = get_from_db(query, str(_id,))
+    result = getFromDB(query, str(_id,))
     for row in result:
         if str(row[0]) == str(_id):
             return True
@@ -60,14 +60,14 @@ def addNewTags(tagList, termID, conn=None, cursor=None):
     for tag in tagList:
         #check if a record of these two combinations exist, if not insert
         query = "SELECT * from tag WHERE termID = %s AND tagName = %s"
-        result = get_from_db(query, (termID, str(tag).lower()), conn, cursor)
+        result = getFromDB(query, (termID, str(tag).lower()), conn, cursor)
         if result:
             if DEBUG:
                 print(result)
                 print("Trying to insert a duplicate tag")
         else:
             query = "INSERT into tag (termID, tagName) VALUES (%s, %s)"
-            post_to_db(query, (termID, str(tag).lower()), conn, cursor)
+            postToDB(query, (termID, str(tag).lower()), conn, cursor)
 
 
 ########################################################################################
@@ -77,7 +77,7 @@ def addNewTags(tagList, termID, conn=None, cursor=None):
 def check_groups_db(_id):
 
     query = "SELECT * FROM grouptb WHERE groupID = %s"
-    result = get_from_db(query, (_id,))
+    result = getFromDB(query, (_id,))
 
     for row in result:
         if row[0] == _id:
@@ -91,7 +91,7 @@ def check_groups_db(_id):
 def getUser(_id):
     #Returns the permission group of the user and whether the user_id is valid or not
     query = "SELECT permissionGroup from user WHERE userID = %s"
-    permission = get_from_db(query, str(_id))
+    permission = getFromDB(query, str(_id))
 
     if not permission:
         return None, False
@@ -125,7 +125,7 @@ def is_ta(user_id, group_id):
         return False
     
     query = "SELECT accessLevel from group_user WHERE userID = %s AND groupID = %s"
-    accessLevel = get_from_db(query, (user_id, group_id))
+    accessLevel = getFromDB(query, (user_id, group_id))
     if accessLevel and accessLevel[0]:
         if accessLevel[0][0] != 'ta':
             return False
@@ -136,7 +136,7 @@ def is_ta(user_id, group_id):
 
 def find_by_name(username):
     query = "SELECT * FROM user WHERE username = %s"
-    result = get_from_db(query, (username,))
+    result = getFromDB(query, (username,))
 
     for row in result:
         if row[1].lower() == username:
@@ -147,7 +147,7 @@ def find_by_name(username):
 def find_by_email(email):
 
     query = "SELECT user.userID FROM user WHERE email = %s"
-    result = get_from_db(query, email)
+    result = getFromDB(query, email)
 
     if result and result[0]:
             return True, result[0][0]
@@ -157,7 +157,7 @@ def find_by_email(email):
 def find_by_token(token):
 
     query = "SELECT * FROM tokens WHERE expired = %s"
-    result = get_from_db(query, (token,))
+    result = getFromDB(query, (token,))
 
     for row in result:
         if row[0] == token:
@@ -168,7 +168,7 @@ def find_by_token(token):
 def check_user_db(_id):
 
     query = "SELECT * FROM user WHERE userID = %s"
-    result = get_from_db(query, (_id,))
+    result = getFromDB(query, (_id,))
 
     for row in result:
         if row[0] == _id:
@@ -179,7 +179,7 @@ def check_user_db(_id):
 #TODO: GOT TO CHANGE THIS LOGIC AS GROUPID ISN'T REQUIRED - JUST THE groupCode
 def check_group_db(id, password):
     query = "SELECT * FROM `group` WHERE `groupID` = %s"
-    result = get_from_db(query, (id,))
+    result = getFromDB(query, (id,))
 
     for row in result:
         if row[0] == id:
@@ -427,7 +427,7 @@ def getImageLocation(image_id):
         return ''
     response = {}
     query = "SELECT `imageLocation` FROM `image` WHERE `imageID` = %s"
-    result = get_from_db(query, image_id)
+    result = getFromDB(query, image_id)
     if result and result[0]:
         return IMG_RETRIEVE_FOLDER + result[0][0]
     else:
@@ -446,7 +446,7 @@ def getAudioLocation(audio_id):
     if audio_id == None:
         return ''
     query = "SELECT `audioLocation` FROM `audio` WHERE `audioID` = %s"
-    result = get_from_db(query, audio_id)
+    result = getFromDB(query, audio_id)
     if result and result[0]:
         return AUD_RETRIEVE_FOLDER + result[0][0]
     else:
@@ -465,16 +465,16 @@ def attachQuestion(module_id, question_id, conn = None, cursor = None):
     """
 
     query = "SELECT * FROM `module_question` WHERE `moduleID` = %s AND `questionID` = %s"
-    result = get_from_db(query, (module_id, question_id), conn, cursor)
+    result = getFromDB(query, (module_id, question_id), conn, cursor)
     # If an empty list is returned, post new link
     if not result or not result[0]:
         query = "INSERT INTO `module_question` (`moduleID`, `questionID`) VALUES (%s, %s)"
-        post_to_db(query, (module_id, question_id), conn, cursor)
+        postToDB(query, (module_id, question_id), conn, cursor)
         return True
     else:
         # Delete link if it exists
         query = "DELETE FROM `module_question` WHERE `moduleID` = %s AND `questionID` = %s"
-        post_to_db(query, (module_id, question_id), conn, cursor)
+        postToDB(query, (module_id, question_id), conn, cursor)
         return False
 
 
@@ -492,7 +492,7 @@ def GetTAList(professorID):
                     AND `group_user`.`groupID` IN \
                     (SELECT `group_user`.`groupID` from `group_user` WHERE `group_user`.`userID` = %s) \
                     WHERE `group_user`.`accessLevel` = 'ta'"
-    ta_results = get_from_db(get_ta_query, professorID)
+    ta_results = getFromDB(get_ta_query, professorID)
     if ta_results and ta_results[0]:
         for ta in ta_results:
             TA_list.append(ta[0])
@@ -532,7 +532,7 @@ def querySessionsToJSON(query, parameters=None):
     parameters -- any parameters that has to be passed in to the query
     """
 
-    result = get_from_db(query, parameters)
+    result = getFromDB(query, parameters)
     sessions = []
     
     for row in result:
@@ -551,11 +551,11 @@ def querySessionsToJSON(query, parameters=None):
         # If an unfinished session, we get the last loggedd answer time associated with the session and update the session end time
         else:
             log_time_query = "SELECT `logged_answer`.`log_time` FROM `logged_answer` WHERE `sessionID`= %s ORDER BY `logID` DESC LIMIT 1"
-            last_log_time = get_from_db(log_time_query, row[0])
+            last_log_time = getFromDB(log_time_query, row[0])
             if last_log_time and last_log_time[0] and last_log_time[0][0] != None:
                 if session['sessionDate'] != time.strftime("%Y-%m-%d"):
                     query_update_time = "UPDATE `session` SET `session`.`endTime` = %s WHERE `session`.`sessionID` = %s"
-                    post_to_db(query_update_time, (dateTimeToMySQL(last_log_time[0][0]), row[0]))
+                    postToDB(query_update_time, (dateTimeToMySQL(last_log_time[0][0]), row[0]))
                     session['endTime'] = last_log_time[0][0]
                     sessions.append(session)
                     try:
@@ -584,7 +584,7 @@ def getAverages(sessions):
         # Accumulating score
         score_total += session['playerScore']
         get_log_count = "SELECT COUNT(`logged_answer`.`logID`) FROM `logged_answer` WHERE `logged_answer`.`sessionID` = %s"
-        logged_answer_count += (get_from_db(get_log_count, session['sessionID']))[0][0]
+        logged_answer_count += (getFromDB(get_log_count, session['sessionID']))[0][0]
         start_date_time = session['startTime']
         # Accumulating time
         end_date_time = session['endTime']
@@ -618,7 +618,15 @@ def convertListToSQL(list):
 
 def find_question(questionID):
     query = "SELECT * FROM question WHERE questionID = %s"
-    result = get_from_db(query, (questionID,))
+    result = getFromDB(query, (questionID,))
     if int(result[0][0]) == int(questionID): 
         return True
+    return False
+
+
+def CheckIfStrHasNum(string):
+    """ Returns true if the given string contains at least one number """
+    for char in string:
+        if char.isdigit():
+            return True
     return False

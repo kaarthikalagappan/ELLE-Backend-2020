@@ -46,7 +46,7 @@ class ModuleReport(Resource):
         for session in sessions:
             session_id = session['sessionID']
             query = f"SELECT * FROM `logged_answer` WHERE `sessionID` = '{session_id}'"
-            result = get_from_db(query)
+            result = getFromDB(query)
             session['logged_answers'] = []
             for row in result:
                 logged_answer = {}
@@ -148,7 +148,7 @@ class AllModuleStats(Resource):
             if include_pf_stats:
                 permission_options = permission_options + " OR `user`.`permissionGroup` = 'pf'"
 
-        moduleIDs = get_from_db(query)
+        moduleIDs = getFromDB(query)
         if permission != 'su' and permission != 'pf':
             query = """SELECT `session`.* FROM `session` 
                     INNER JOIN `user` ON `user`.`userID` = `session`.`userID` 
@@ -171,7 +171,7 @@ class AllModuleStats(Resource):
             if not stat:
                 continue
             mn_query = f"SELECT `name` FROM `module` WHERE `moduleID` = {moduleID[0]}"
-            module_name = get_from_db(mn_query)
+            module_name = getFromDB(mn_query)
             stat['moduleID'] = moduleID[0]
             stat['name'] = module_name[0][0]
             stats.append(stat)
@@ -227,18 +227,18 @@ class PlatformStats(Resource):
             performance_objs = 0
             total_platform_objs = 0
 
-            db_records = get_from_db(retrieve_stats_query, platform)
+            db_records = getFromDB(retrieve_stats_query, platform)
             if not db_records or not db_records:
                 continue
             for record in db_records:
                 if not record[6]:
                     log_time_query = f"SELECT `logged_answer`.`log_time` FROM `logged_answer` WHERE `sessionID`={record[0]} ORDER BY `logID` DESC LIMIT 1"
-                    last_log_time = get_from_db(log_time_query)
+                    last_log_time = getFromDB(log_time_query)
                     if last_log_time and last_log_time[0] and last_log_time[0][0] != None:
                         record[6] = last_log_time[0][0]
                         if record[3] != time.strftime("%Y-%m-%d"):
                             query_update_time = f"UPDATE `session` SET `session`.`endTime` = '{last_log_time[0][0]}' WHERE `session`.`sessionID` = {record[0]}"
-                            post_to_db(query_update_time)
+                            postToDB(query_update_time)
 
                             try:
                                 # Since we changed the sessions data on db, invalidate Redis cache
@@ -256,7 +256,7 @@ class PlatformStats(Resource):
                                               FROM `logged_answer` 
                                               WHERE `logged_answer`.`sessionID` = {record[0]}
                                               """
-                    answer_data = get_from_db(get_logged_answer_score)
+                    answer_data = getFromDB(get_logged_answer_score)
                     if answer_data and answer_data[0] and answer_data[0][0] != None:
                         correct_answers = int(answer_data[0][0])
                         if record[3] != time.strftime("%Y-%m-%d"):
@@ -264,7 +264,7 @@ class PlatformStats(Resource):
                                                 UPDATE `session` SET `session`.`playerScore` = {correct_answers}
                                                 WHERE `session`.`sessionID` = {record[0]}
                                                 """
-                            post_to_db(update_score_query)
+                            postToDB(update_score_query)
                             try:
                                 # Since we changed the sessions data on db, invalidate Redis cache
                                 redis_conn = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, charset=REDIS_CHARSET, decode_responses=True)
@@ -341,7 +341,7 @@ class TermsPerformance(Resource):
                                      """
         if not data['groupID']:
             groupID_list = []
-            groupID_from_db = get_from_db(get_associated_groups)
+            groupID_from_db = getFromDB(get_associated_groups)
             for groupID in groupID_from_db:
                 groupID_list.append(groupID[0])
             groupID_list = convertListToSQL(groupID_list)
@@ -349,7 +349,7 @@ class TermsPerformance(Resource):
             if permission != 'su':
                 # If PF or ST accessing this API, then they can only retrieve stats for groups they are associated with
                 check_if_in_group = f"SELECT 1 FROM `group_user` WHERE `userID` = {user_id} AND `groupID` = {data['groupID']}"
-                is_in_group = get_from_db(check_if_in_group)
+                is_in_group = getFromDB(check_if_in_group)
                 if not is_in_group or not is_in_group[0]:
                     return returnMessage("Not associated with that group"), 400
             groupID_list = "= " + str(data['groupID'])
@@ -371,7 +371,7 @@ class TermsPerformance(Resource):
                 # PF and SU can access other students' records
                 if permission != 'su':
                     check_user_id_level = f"""SELECT 1 FROM `user` WHERE `userID` = {data['userID']} AND `permissionGroup` = 'su'"""
-                    is_getting_su_stats = get_from_db(check_user_id_level)
+                    is_getting_su_stats = getFromDB(check_user_id_level)
                     if is_getting_su_stats and is_getting_su_stats[0]:
                         return returnMessage("No records found"), 200
                     else:
@@ -379,7 +379,7 @@ class TermsPerformance(Resource):
                 else:
                     group_userID_list = "= " + str(data['userID'])
             else:
-                group_userID_from_db = get_from_db(get_associated_group_users)
+                group_userID_from_db = getFromDB(get_associated_group_users)
                 group_userID_list = []
                 for userID in group_userID_from_db:
                     # Since the current user is the professor/SU, ignore any of his/her/their data
@@ -399,7 +399,7 @@ class TermsPerformance(Resource):
             moduleID_list = "= " + str(data['moduleID'])
         else:
             moduleID_list = []
-            moduleID_from_db = get_from_db(get_associated_modules)
+            moduleID_from_db = getFromDB(get_associated_modules)
             for moduleID in moduleID_from_db:
                 moduleID_list.append(moduleID[0])
             moduleID_list = convertListToSQL(moduleID_list)
@@ -421,7 +421,7 @@ class TermsPerformance(Resource):
                  WHERE `logged_answer`.`sessionID` IN 
                  (SELECT `sessionID` from `session` WHERE `moduleID` {moduleID_list} AND `userID` {group_userID_list})
                  """
-        loggedAnswers = get_from_db(query)
+        loggedAnswers = getFromDB(query)
 
         termCorrectness = {}
         for loggedAns in loggedAnswers:
@@ -441,11 +441,11 @@ class TermsPerformance(Resource):
             termCorrectness[termID]['correctness'] = termCorrectness[termID]['correctness'] / termCorrectness[termID]['count']
             get_term = f"""SELECT `term`.`termID`, `term`.`front`, `term`.`back`, `term`.`type`, `term`.`gender`, `term`.`language` 
                         FROM `term` WHERE `termID` = {termID}"""
-            term_info = get_from_db(get_term)
+            term_info = getFromDB(get_term)
             if not term_info and not term_info[0]:
                 # # If want to include deleted terms information
                 # get_term = f"SELECT * from deleted_term WHERE termID = {termID}"
-                # term_info = get_from_db(get_term)
+                # term_info = getFromDB(get_term)
                 # if not term_info and not term_info[0]:
                 #     continue
                 continue
@@ -474,7 +474,7 @@ class LanguageStats(Resource):
     @jwt_required
     def get(self):
         get_module_lang_query = "SELECT `module`.`moduleID`, `module`.`language` from `module`"
-        all_modules = get_from_db(get_module_lang_query)
+        all_modules = getFromDB(get_module_lang_query)
         # A dictionary to hold language codes and how many times it has occured
         lang_count = {}
         total_counter = 0

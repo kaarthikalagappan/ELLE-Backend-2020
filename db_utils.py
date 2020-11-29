@@ -13,7 +13,7 @@ def get_one_from_db(query, vals=None):
 	conn.close()
 	return result
 
-def get_from_db(query, vals=None, providedConn=None, providedCursor=None):
+def getFromDB(query, vals=None, providedConn=None, providedCursor=None):
 	if providedConn is None:
 		conn = mysql.connect()
 	elif providedConn:
@@ -33,7 +33,7 @@ def get_from_db(query, vals=None, providedConn=None, providedCursor=None):
 		conn.close()
 	return result
 
-def post_to_db(query, vals=None, providedConn=None, providedCursor=None):
+def postToDB(query, vals=None, providedConn=None, providedCursor=None):
 	if providedConn is None:
 		conn = mysql.connect()
 	elif providedConn:
@@ -48,7 +48,7 @@ def post_to_db(query, vals=None, providedConn=None, providedCursor=None):
 		conn.commit()
 		conn.close()
 
-def delete_from_db(query, vals=None, providedConn=None, providedCursor=None):
+def deleteFromDB(query, vals=None, providedConn=None, providedCursor=None):
 	if providedConn is None:
 		conn = mysql.connect()
 	elif providedConn:
