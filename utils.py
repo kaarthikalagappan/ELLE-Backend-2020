@@ -5,6 +5,9 @@ from time import sleep
 import os
 import shutil
 import csv
+import redis
+from config import *
+import time
 import subprocess
 import ffmpeg
 import string
@@ -582,6 +585,50 @@ def getAverages(sessions):
     logged_answer_count = 0
     for session in sessions:
         # Accumulating score
+            
+        if not session['startTime']:
+            continue
+        
+        if not session['endTime']:
+            # If an unfinished session, we get the last loggedd answer time associated with the session and update the session end time
+
+            log_time_query = "SELECT `logged_answer`.`log_time` FROM `logged_answer` WHERE `sessionID`= %s ORDER BY `logID` DESC LIMIT 1"
+            last_log_time = getFromDB(log_time_query, session['sessionID'])
+            if last_log_time and last_log_time[0] and last_log_time[0][0] != None:
+                if session['sessionDate'] != time.strftime("%Y-%m-%d"):
+                    query_update_time = "UPDATE `session` SET `session`.`endTime` = %s WHERE `session`.`sessionID` = %s"
+                    postToDB(query_update_time, (dateTimeToMySQL(last_log_time[0][0]), session['sessionID']))
+                    session['endTime'] = last_log_time[0][0]
+                    sessions.append(session)
+                    try:
+                        # Since we changed the sessions data on db, invalidate Redis cache
+                        redis_conn = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, charset=REDIS_CHARSET, decode_responses=True)
+                        redis_conn.delete('sessions_csv')
+                    except redis.exceptions.ConnectionError:
+                        pass
+            else:
+                # No associated logged answer was found
+                continue
+
+        if not session['playerScore']:
+            # If playerscore was not found, we retrieve a sum of all associated logged answer's correct values and use that as playerscore
+            get_logged_answer_sum = "SELECT SUM(`logged_answer`.`correct`) FROM `logged_answer` WHERE `logged_answer`.`sessionID` = %s"
+            logged_answer_sum = getFromDB(get_logged_answer_sum, session['sessionID'])
+            if session['sessionDate'] != time.strftime("%Y-%m-%d"):
+                update_session = "UPDATE `session` SET `playerScore` = %s WHERE `session`.`sessionID` = %s"
+                postToDB(update_session, (logged_answer_sum[0], session['sessionID']))
+                try:
+                    # Since we changed the sessions data on db, invalidate Redis cache
+                    redis_conn = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, charset=REDIS_CHARSET, decode_responses=True)
+                    redis_conn.delete('sessions_csv')
+                except redis.exceptions.ConnectionError:
+                    pass
+            if logged_answer_sum and logged_answer_sum[0] and logged_answer_sum[0][0] != None:
+                session['playerScore'] = logged_answer_sum[0][0]
+            else:
+                # If no associated logged answers were found
+                continue
+
         score_total += session['playerScore']
         get_log_count = "SELECT COUNT(`logged_answer`.`logID`) FROM `logged_answer` WHERE `logged_answer`.`sessionID` = %s"
         logged_answer_count += (getFromDB(get_log_count, session['sessionID']))[0][0]
@@ -592,7 +639,7 @@ def getAverages(sessions):
         time_total += elapsedTime.seconds
     # Returning statistics object
     stat = {}
-    stat['averageScore'] = (score_total / logged_answer_count) if logged_answer_count != 0 else 0
+    stat['averageScore'] = (score_total / logged_answer_count) if score_total and logged_answer_count != 0 else 0
     # Session length in minutes
     stat['averageSessionLength'] = str(datetime.timedelta(seconds = (time_total)))
     return stat

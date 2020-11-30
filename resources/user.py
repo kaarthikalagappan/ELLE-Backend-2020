@@ -152,7 +152,7 @@ class UserLogout(Resource):
     @jwt_required
     def post(self):
         data = {}
-        data['refresh_token'] = getParameter("refresh_token", str, False, "")
+        # data['refresh_token'] = getParameter("refresh_token", str, False, "")
 
         permission, user_id = validate_permissions()
         if not permission or not user_id:
@@ -162,10 +162,10 @@ class UserLogout(Resource):
         query = "INSERT INTO `tokens` VALUES (%s)"
         postToDB(query, jti)
 
-        if data['refresh_token']:
-            jti = get_jti(data['refresh_token'])
-            query = "INSERT INTO `tokens` VALUES (%s)"
-            postToDB(query, jti)
+        # if data['refresh_token']:
+        #     jti = get_jti(data['refresh_token'])
+        #     query = "INSERT INTO `tokens` VALUES (%s)"
+        #     postToDB(query, jti)
 
         return returnMessage("Successfully logged out"), 200
 
@@ -188,8 +188,9 @@ class UserLogin(Resource):
                     expires = datetime.timedelta(hours=18)
                     user_obj = UserObject(user_id=user[0], permissionGroup=user[4])
                     access_token = create_access_token(identity=user_obj, expires_delta=expires)
-                    refresh_token = create_refresh_token(identity=user_obj)
-                    raise ReturnSuccess({'access_token': access_token, 'refresh_token' : refresh_token, 'id' : user[0]}, 200)
+                    # refresh_token = create_refresh_token(identity=user_obj)
+                    # raise ReturnSuccess({'access_token': access_token, 'refresh_token' : refresh_token, 'id' : user[0]}, 200)
+                    raise ReturnSuccess({'access_token': access_token, 'id' : user[0]}, 200)
                 else:
                     raise CustomException("Incorrect Password. Try again", 401)
             else:
@@ -618,9 +619,11 @@ class OTCLogin(Resource):
             expires = datetime.timedelta(hours=18)
             user_obj = UserObject(user_id=results[0][0], permissionGroup=results[0][4])
             access_token = create_access_token(identity=user_obj, expires_delta=expires)
-            refresh_token = create_refresh_token(identity=user_obj)
+            # refresh_token = create_refresh_token(identity=user_obj)
 
-            raise ReturnSuccess({"access_token" : access_token, "refresh_token" : refresh_token, "id" : results[0][0]}, 200)
+            # raise ReturnSuccess({"access_token" : access_token, "refresh_token" : refresh_token, "id" : results[0][0]}, 200)
+            raise ReturnSuccess({"access_token" : access_token, "id" : results[0][0]}, 200)
+
         except CustomException as error:
             conn.rollback()
             return error.msg, error.returnCode
@@ -705,29 +708,29 @@ class User_Preferences(Resource):
                 conn.close()
 
 
-class Refresh(Resource):
-    @jwt_refresh_token_required
-    def post(self):
+# class Refresh(Resource):
+#     @jwt_refresh_token_required
+#     def post(self):
 
-        try:
-            conn = mysql.connect()
-            cursor = conn.cursor()
+#         try:
+#             conn = mysql.connect()
+#             cursor = conn.cursor()
 
-            user_id = get_jwt_identity()
-            query = "SELECT `permissionGroup`, `email` FROM `user` WHERE `userID`= %s"
-            permission = getFromDB(query, user_id, conn, cursor)
-            user_obj = UserObject(user_id=user_id, permissionGroup=permission[0][0])
-            raise ReturnSuccess({'access_token': create_access_token(identity=user_obj), 'user_id' : user_id }, 200)
-        except CustomException as error:
-            conn.rollback()
-            return error.msg, error.returnCode
-        except ReturnSuccess as success:
-            conn.commit()
-            return success.msg, success.returnCode
-        except Exception as error:
-            conn.rollback()
-            return errorMessage(str(error)), 500
-        finally:
-            if(conn.open):
-                cursor.close()
-                conn.close()
+#             user_id = get_jwt_identity()
+#             query = "SELECT `permissionGroup`, `email` FROM `user` WHERE `userID`= %s"
+#             permission = getFromDB(query, user_id, conn, cursor)
+#             user_obj = UserObject(user_id=user_id, permissionGroup=permission[0][0])
+#             raise ReturnSuccess({'access_token': create_access_token(identity=user_obj), 'user_id' : user_id }, 200)
+#         except CustomException as error:
+#             conn.rollback()
+#             return error.msg, error.returnCode
+#         except ReturnSuccess as success:
+#             conn.commit()
+#             return success.msg, success.returnCode
+#         except Exception as error:
+#             conn.rollback()
+#             return errorMessage(str(error)), 500
+#         finally:
+#             if(conn.open):
+#                 cursor.close()
+#                 conn.close()

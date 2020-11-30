@@ -12,7 +12,7 @@ from pathlib import Path
 from resources.user import (UserRegister, Users, UserLogin, UserLogout, 
 							User, ResetPassword, CheckIfActive, UsersHighscores, 
 							UserLevels, GenerateUsername, GetUsernames, 
-							GenerateOTC, OTCLogin, User_Preferences, Refresh,
+							GenerateOTC, OTCLogin, User_Preferences,
 							ForgotPassword, ChangePassword, ForgotUsername)
 from resources.terms import (Term, Tags, Tag_Term, Tags_In_Term, 
 							 Specific_Term, TagCount)
@@ -162,12 +162,11 @@ api.add_resource(User_Preferences, API_ENDPOINT_PREFIX+'userpreferences')
 api.add_resource(LanguageStats, API_ENDPOINT_PREFIX+'languagestats')
 api.add_resource(AllModuleStats, API_ENDPOINT_PREFIX+'allmodulestats')
 api.add_resource(TagCount, API_ENDPOINT_PREFIX+'tagcount')
-api.add_resource(Refresh, API_ENDPOINT_PREFIX+'refresh')
+# api.add_resource(Refresh, API_ENDPOINT_PREFIX+'refresh')
 api.add_resource(TermsPerformance, API_ENDPOINT_PREFIX+'termsperformance')
 api.add_resource(ForgotPassword, API_ENDPOINT_PREFIX+'forgotpassword', resource_class_kwargs={'mail' : mail})
 api.add_resource(ChangePassword, API_ENDPOINT_PREFIX+'changepassword')
 api.add_resource(ForgotUsername, API_ENDPOINT_PREFIX+'forgotusername', resource_class_kwargs={'mail' : mail})
-# api.add_resource(Purge, API_ENDPOINT_PREFIX+'/ppuurrggee')
 
 if __name__ == '__main__':
 	app.run(host='0.0.0.0', port='3000', debug=True)
