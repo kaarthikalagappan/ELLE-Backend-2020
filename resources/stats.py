@@ -177,7 +177,7 @@ class AllModuleStats(Resource):
             stats.append(stat)
 
         stats.sort(reverse=True, key=lambda s: s['averageScore'])
-        return stats
+        return json.loads(json.dumps(stats, default=ObjectToJSONString))
 
 
 class PlatformStats(Resource):
