@@ -19,7 +19,7 @@ Or the following steps can be used to manually setup the backend on your local m
 * Setup a SQL server (this was originally developed on a MySQL database) and use the `schema.sql` file to create the required tables and fields
 * Change the database configuration values in the `config.py` file to reflect the newly create database information
 * Start the Flask framework by running `python3 __init__.py`
-    * This starts Flask on debug mode and binded to port 3000
+    * This starts Flask on debug mode and binded to port 5000
 
 Note I: It isn't recommended to run the Flask app in debug mode using the built-in server in a production server. Consider using a different server such as WSGI to deploy the Flask app in a production server.
 

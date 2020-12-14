@@ -197,7 +197,7 @@ class GetLoggedAnswerCSV(Resource):
                             replace_query = "SELECT `name` FROM `deleted_module` WHERE `moduleID` = %s"
                             replace = getFromDB(replace_query, record[13])
                             record[12] = replace[0][0]
-                        csv = csv + f"""{record[0]}, {record[9]}, {record[10]}, {record[11]}, {record[13]}, {record[12]}, {record[1]}, {record[7]}, {record[2]}, {record[8]} {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
+                        csv = csv + f"""{record[0]}, {record[9]}, {record[10]}, {record[11]}, {record[13]}, {record[12]}, {record[1]}, {record[7]}, {record[2]}, {record[8]}, {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
             else:
                 csv = ""
                 query = "SELECT `logged_answer`.*, `session`.`userID`, `user`.`username`, `module`.`moduleID`, `module`.`name`, `session`.`deleted_moduleID` FROM `logged_answer` \
@@ -215,7 +215,7 @@ class GetLoggedAnswerCSV(Resource):
                             replace_query = "SELECT `name` FROM `deleted_module` WHERE `moduleID` = %s"
                             replace = getFromDB(replace_query, record[13])
                             record[12] = replace[0][0]
-                        csv = csv + f"""{record[0]}, {record[9]}, {record[10]}, {record[11]}, {record[13]}, {record[12]}, {record[1]}, {record[7]}, {record[2]}, {record[8]} {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
+                        csv = csv + f"""{record[0]}, {record[9]}, {record[10]}, {record[11]}, {record[13]}, {record[12]}, {record[1]}, {record[7]}, {record[2]}, {record[8]}, {record[3]}, {record[4]}, {str(record[6])}, {record[5]}\n"""
 
             last_record_id = results[-1][0]
             

@@ -169,4 +169,4 @@ api.add_resource(ChangePassword, API_ENDPOINT_PREFIX+'changepassword')
 api.add_resource(ForgotUsername, API_ENDPOINT_PREFIX+'forgotusername', resource_class_kwargs={'mail' : mail})
 
 if __name__ == '__main__':
-	app.run(host='0.0.0.0', port='3000', debug=True)
+	app.run(host='0.0.0.0', port='5000', debug=True)

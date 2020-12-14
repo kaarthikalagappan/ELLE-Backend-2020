@@ -13,6 +13,7 @@ import ffmpeg
 import string
 import datetime
 import random
+from decimal import *
 from flask_restful import reqparse
 from flask_jwt_extended import (
     get_jwt_identity,
@@ -639,20 +640,21 @@ def getAverages(sessions):
         time_total += elapsedTime.seconds
     # Returning statistics object
     stat = {}
-    stat['averageScore'] = (score_total / logged_answer_count) if score_total and logged_answer_count != 0 else 0
+    stat['averageScore'] = (score_total / logged_answer_count) if (score_total and logged_answer_count != 0.0) else 0.0
     # Session length in minutes
     stat['averageSessionLength'] = str(datetime.timedelta(seconds = (time_total)))
     return stat
 
 
-def DateTimeToString(o):
-    """ This function is to be used for json.dumps()'s default parameter. Converts datetime object into a serializable object """
+def ObjectToJSONString(o):
+    """ This function is to be used for json.dumps()'s default parameter. Converts unsupported objects into a serializable object for JSON """
 
     if isinstance(o, datetime.datetime):
         return str(o)
     elif isinstance(o, datetime.timedelta):
         return str(o)
-
+    elif isinstance(o, Decimal):
+        return str(o)
 
 def convertListToSQL(list):
     if len(list) <= 0:

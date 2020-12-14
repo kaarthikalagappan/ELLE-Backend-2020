@@ -57,7 +57,7 @@ class ModuleReport(Resource):
                 logged_answer['correct'] = row[4]
                 session['logged_answers'].append(logged_answer)
 
-        return json.loads(json.dumps(sessions, default=DateTimeToString))
+        return json.loads(json.dumps(sessions, default=ObjectToJSONString))
 
 
 class PlatformNames(Resource):
@@ -116,7 +116,7 @@ class ModuleStats(Resource):
             stats.append(stat)
 
         stats.sort(reverse=True, key=lambda s: s['averageScore'])
-        return stats
+        return json.loads(json.dumps(stats, default=ObjectToJSONString))
         
 
 class AllModuleStats(Resource):
