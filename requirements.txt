@@ -16,7 +16,7 @@ Flask-OAuth==0.12
 flask-redis==0.4.0
 Flask-RESTful==0.3.8
 Flask-Uploads==0.2.1
-httplib2==0.18.1
+httplib2==0.19.0
 idna==2.10
 isort==4.3.21
 itsdangerous==1.1.0
