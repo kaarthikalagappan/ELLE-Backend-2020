@@ -8,7 +8,7 @@ click==7.1.2
 db==0.1.1
 ffmpeg==1.4
 Flask==1.1.2
-Flask-Cors==3.0.8
+Flask-Cors==3.0.9
 Flask-JWT-Extended==3.24.1
 Flask-Mail==0.9.1
 Flask-MySQL==1.5.1
