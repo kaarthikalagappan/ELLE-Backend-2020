@@ -144,6 +144,7 @@ class End_Session(Resource):
         """
 
         sessionID = getParameter("sessionID", int, True, "ID of session needed in int format to retrieve is required")
+        endTime = getParameter("endTime", str, False, "Time that the session was ended")
         playerScore = getParameter("playerScore", int, True, "Need to specify what's the score of the user in this session (integer format)")
 
         # Validate the user
@@ -165,7 +166,12 @@ class End_Session(Resource):
                     raise CustomException("Wrong session ID provided", 400)
 
             query = "UPDATE `session` SET `endTime` = %s, `playerScore` = %s WHERE `session`.`sessionID` = %s"
-            postToDB(query, (formatted_time, playerScore, sessionID), conn, cursor)
+
+            if not endTime:
+                postToDB(query, (formatted_time, playerScore, sessionID), conn, cursor)
+            else:
+                postToDB(query, (endTime, playerScore, sessionID), conn, cursor)
+                
             raise ReturnSuccess("Session successfully ended", 200)
         except ReturnSuccess as success:
             conn.commit()
