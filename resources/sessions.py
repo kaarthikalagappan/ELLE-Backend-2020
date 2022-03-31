@@ -28,6 +28,7 @@ class Session(Resource):
         moduleID = getParameter("moduleID", str, True, "moduleID of module used in session required")
         mode = getParameter("mode", str, False)
         sessionDate = getParameter("sessionDate", str, False)
+        startTime = getParameter("startTime", str, False, "Starting time of the session")
         platform = getParameter("platform", str, True, "Need to specify what platform this session was played on (pc, mob, or vr)")
 
         if not sessionDate or sessionDate == '':
@@ -50,7 +51,10 @@ class Session(Resource):
             cursor = conn.cursor()
 
             formatted_date = dateutil.parse(sessionDate).strftime('%Y-%m-%d')
-            formatted_time = datetime.datetime.now().time().strftime('%H:%M')
+            if not startTime:
+                formatted_time = datetime.datetime.now().time().strftime('%H:%M')
+            else:
+                formatted_time = startTime
 
             if mode:
                 query = """INSERT INTO `session` (`userID`, `moduleID`, `sessionDate`, `startTime`, `mode`, `platform`)
